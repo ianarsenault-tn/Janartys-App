@@ -1,5 +1,5 @@
 import "./styles.css";
-import { FAVORITE_IDS, PIN, PIN_SESSION_KEY } from "./data.js";
+import { FAVORITE_IDS, STAFF_PASSWORD_HASH, STAFF_SESSION_KEY } from "./data.js";
 import {
   addFlavor,
   availableForSwap,
@@ -13,17 +13,27 @@ import {
 
 const root = document.querySelector("#app");
 
+const STAFF_FAIL_KEY = "janartys-staff-fails";
+const STAFF_LOCK_KEY = "janartys-staff-lock-until";
+const MAX_FAILS = 5;
+const LOCK_MS = 2 * 60 * 1000;
+const LOGO_TAPS_NEEDED = 7;
+const LOGO_TAP_GAP_MS = 1600;
+
 const ui = {
-  view: "case", // case | pin | manager
+  view: "case", // case | login | manager
   selectedPan: null,
   pickId: null,
   search: "",
   sheet: null, // null | swap | add
-  pin: "",
-  pinError: false,
+  password: "",
+  staffError: "",
+  staffBusy: false,
   toast: null, // { kind, html, sub }
   add: { name: "", note: "", dairyFree: false, color: "#A948A6" },
   lastSeenSwapAt: 0,
+  logoTaps: 0,
+  logoTapAt: 0,
 };
 
 let uid = 0;
@@ -80,8 +90,65 @@ function relativeTime(ts) {
   return hr === 1 ? "Updated 1 hr ago" : `Updated ${hr} hr ago`;
 }
 
-function isManagerUnlocked() {
-  return sessionStorage.getItem(PIN_SESSION_KEY) === "ok";
+function isStaffRoute() {
+  const raw = (location.hash || "").replace(/^#/, "").replace(/\/+$/, "");
+  return raw === "/staff" || raw === "staff";
+}
+
+function isStaffUnlocked() {
+  return sessionStorage.getItem(STAFF_SESSION_KEY) === "ok";
+}
+
+function lockUntil() {
+  const n = Number(sessionStorage.getItem(STAFF_LOCK_KEY) || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isLocked() {
+  return Date.now() < lockUntil();
+}
+
+function failCount() {
+  const n = Number(sessionStorage.getItem(STAFF_FAIL_KEY) || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function scheduleUnlockRender() {
+  clearTimeout(scheduleUnlockRender._t);
+  const ms = lockUntil() - Date.now();
+  if (ms <= 0) return;
+  scheduleUnlockRender._t = setTimeout(() => {
+    if (ui.view === "login") {
+      ui.staffError = "";
+      render();
+    }
+  }, ms + 30);
+}
+
+function recordFail() {
+  const n = failCount() + 1;
+  if (n >= MAX_FAILS) {
+    sessionStorage.setItem(STAFF_LOCK_KEY, String(Date.now() + LOCK_MS));
+    sessionStorage.setItem(STAFF_FAIL_KEY, "0");
+    scheduleUnlockRender();
+  } else {
+    sessionStorage.setItem(STAFF_FAIL_KEY, String(n));
+  }
+}
+
+function clearFails() {
+  sessionStorage.removeItem(STAFF_FAIL_KEY);
+  sessionStorage.removeItem(STAFF_LOCK_KEY);
+}
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text)
+  );
+  return Array.from(new Uint8Array(buf), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 function goCase() {
@@ -90,21 +157,42 @@ function goCase() {
   ui.selectedPan = null;
   ui.pickId = null;
   ui.search = "";
+  ui.password = "";
+  ui.staffError = "";
   history.replaceState(null, "", "#/");
   render();
 }
 
-function goManager() {
-  if (!isManagerUnlocked()) {
-    ui.view = "pin";
-    ui.pin = "";
-    ui.pinError = false;
+function goStaff() {
+  if (!isStaffUnlocked()) {
+    ui.view = "login";
+    ui.password = "";
+    ui.staffError = isLocked()
+      ? "Too many tries. Pause for a couple of minutes."
+      : "";
     ui.sheet = null;
+    if (isLocked()) scheduleUnlockRender();
   } else {
     ui.view = "manager";
   }
-  history.replaceState(null, "", "#/manager");
+  history.replaceState(null, "", "#/staff");
   render();
+  if (ui.view === "login") {
+    requestAnimationFrame(() => {
+      root.querySelector("[data-act=staff-pass]")?.focus();
+    });
+  }
+}
+
+function onLogoTap() {
+  const now = Date.now();
+  if (now - ui.logoTapAt > LOGO_TAP_GAP_MS) ui.logoTaps = 0;
+  ui.logoTaps += 1;
+  ui.logoTapAt = now;
+  if (ui.logoTaps >= LOGO_TAPS_NEEDED) {
+    ui.logoTaps = 0;
+    goStaff();
+  }
 }
 
 function showToast(kind, html, sub = "") {
@@ -136,27 +224,6 @@ function onSwapSuccess(swap) {
       showToast("customer", customerHtml);
     }, 1400);
   }
-}
-
-function tabbar(active) {
-  return `<nav class="tabbar" aria-label="App">
-    <button class="tab ${active === "case" ? "active" : ""}" data-act="tab-case" type="button">
-      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-        <rect x="3" y="3" width="8.5" height="8.5" rx="2.2" fill="currentColor"/>
-        <rect x="14.5" y="3" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity="0.45"/>
-        <rect x="3" y="14.5" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity="0.45"/>
-        <rect x="14.5" y="14.5" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity="0.45"/>
-      </svg>
-      <span class="tab-label">Case</span>
-    </button>
-    <button class="tab ${active === "manager" || active === "pin" ? "active" : ""}" data-act="tab-manager" type="button">
-      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-        <rect x="7.2" y="11.5" width="11.6" height="9.2" rx="2" stroke="currentColor" stroke-width="1.7"/>
-        <path d="M9.4 11.5 V9.2 a3.6 3.6 0 0 1 7.2 0 v2.3" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-      </svg>
-      <span class="tab-label">Manager</span>
-    </button>
-  </nav>`;
 }
 
 function toastHtml() {
@@ -194,7 +261,9 @@ function renderCase() {
   root.innerHTML = `
     <div class="screen">
       <header class="nav">
-        ${coneSvg()}
+        <button class="nav-logo" type="button" data-act="logo-tap" aria-label="Janarty’s">
+          ${coneSvg()}
+        </button>
         <div class="nav-copy">
           <div class="nav-title">What’s Out</div>
           <div class="nav-meta">${relativeTime(state.updatedAt)}</div>
@@ -209,25 +278,18 @@ function renderCase() {
         </div>
       </div>
       <div class="case">${cards}</div>
-      ${tabbar("case")}
     </div>
     ${toastHtml()}
   `;
 }
 
-function renderPin() {
-  const filled = ui.pin.length;
-  const dots = [0, 1, 2, 3]
-    .map((i) => `<span class="pin-dot ${i < filled ? "filled" : ""}"></span>`)
-    .join("");
-  const keys = [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "⌫"]
-    .map((k) => {
-      if (k === "") return `<span></span>`;
-      const ghost = k === "⌫" ? "ghost" : "";
-      const val = k === "⌫" ? "del" : k;
-      return `<button class="pad-key ${ghost}" type="button" data-act="pin" data-k="${val}">${k}</button>`;
-    })
-    .join("");
+function renderLogin() {
+  const locked = isLocked();
+  const err = locked
+    ? "Too many tries. Pause for a couple of minutes."
+    : ui.staffError;
+  const disabled = locked || ui.staffBusy ? "disabled" : "";
+  const shake = ui.staffError && !locked ? "shake" : "";
 
   root.innerHTML = `
     <div class="screen">
@@ -235,17 +297,21 @@ function renderPin() {
         ${coneSvg()}
         <div class="nav-copy">
           <div class="nav-kicker">Staff</div>
-          <div class="nav-title lg">Manager</div>
+          <div class="nav-title lg">Unlock</div>
         </div>
+        <button class="nav-case" type="button" data-act="go-case">Case</button>
       </header>
-      <div class="pin ${ui.pinError ? "shake" : ""}">
-        <div class="pin-title">Enter PIN</div>
-        <p class="pin-sub">Four digits. Customers never see this screen.</p>
-        <div class="pin-dots" aria-hidden="true">${dots}</div>
-        <div class="pin-error">${ui.pinError ? "Try again" : ""}</div>
-        <div class="pin-pad">${keys}</div>
-      </div>
-      ${tabbar("pin")}
+      <form class="staff ${shake}" data-act="staff-form" autocomplete="off">
+        <p class="staff-sub">Password for the case.</p>
+        <label class="sr-only" for="staff-pass">Password</label>
+        <input class="field staff-pass" id="staff-pass" type="password" name="password"
+          autocomplete="current-password" data-act="staff-pass"
+          value="${esc(ui.password)}" ${disabled} />
+        <div class="staff-error">${esc(err)}</div>
+        <button class="primary-btn staff-go" type="submit" data-act="staff-submit" ${disabled}>
+          Unlock
+        </button>
+      </form>
     </div>
   `;
 }
@@ -376,17 +442,16 @@ function renderManager() {
       <header class="nav">
         ${coneSvg()}
         <div class="nav-copy">
-          <div class="nav-kicker">Manager</div>
+          <div class="nav-kicker">Staff</div>
           <h1 class="nav-title lg">The case</h1>
         </div>
-        <div class="nav-meta">Open · 9pm</div>
+        <button class="nav-case" type="button" data-act="go-case">Case</button>
       </header>
       <p class="hint">Tap a pan to swap it. Customers get a toast.</p>
       <div class="pans">${pans}</div>
       <div class="mgr-actions">
         <button class="ghost-btn" type="button" data-act="open-add">Add flavor</button>
       </div>
-      ${tabbar("manager")}
     </div>
     ${sheet}
     ${toastHtml()}
@@ -398,12 +463,13 @@ function render() {
   const restoreSearch =
     focus && focus.getAttribute && focus.getAttribute("data-act") === "search";
   const restoreAdd = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("add-");
-  const selStart = restoreSearch || restoreAdd ? focus.selectionStart : null;
-  const selEnd = restoreSearch || restoreAdd ? focus.selectionEnd : null;
-  const restoreAct = restoreSearch || restoreAdd ? focus.getAttribute("data-act") : null;
+  const restorePass = focus && focus.getAttribute && focus.getAttribute("data-act") === "staff-pass";
+  const selStart = restoreSearch || restoreAdd || restorePass ? focus.selectionStart : null;
+  const selEnd = restoreSearch || restoreAdd || restorePass ? focus.selectionEnd : null;
+  const restoreAct = restoreSearch || restoreAdd || restorePass ? focus.getAttribute("data-act") : null;
 
   if (ui.view === "case") renderCase();
-  else if (ui.view === "pin") renderPin();
+  else if (ui.view === "login") renderLogin();
   else renderManager();
 
   if (restoreAct) {
@@ -417,21 +483,48 @@ function render() {
   }
 }
 
-function submitPin() {
-  if (ui.pin === PIN) {
-    sessionStorage.setItem(PIN_SESSION_KEY, "ok");
-    ui.view = "manager";
-    ui.pin = "";
-    ui.pinError = false;
+async function submitPassword() {
+  if (ui.staffBusy) return;
+  if (isLocked()) {
+    ui.staffError = "Too many tries. Pause for a couple of minutes.";
     render();
-  } else {
-    ui.pinError = true;
-    ui.pin = "";
+    return;
+  }
+  const typed = ui.password;
+  if (!typed) {
+    ui.staffError = "Enter the password.";
     render();
-    setTimeout(() => {
-      ui.pinError = false;
+    return;
+  }
+  ui.staffBusy = true;
+  ui.staffError = "";
+  render();
+  try {
+    const hex = await sha256Hex(typed);
+    if (hex === STAFF_PASSWORD_HASH) {
+      sessionStorage.setItem(STAFF_SESSION_KEY, "ok");
+      clearFails();
+      ui.password = "";
+      ui.staffError = "";
+      ui.staffBusy = false;
+      ui.view = "manager";
       render();
-    }, 500);
+      return;
+    }
+    ui.password = "";
+    recordFail();
+    ui.staffBusy = false;
+    ui.staffError = isLocked()
+      ? "Too many tries. Pause for a couple of minutes."
+      : "That didn’t match. Try again.";
+    render();
+    requestAnimationFrame(() => {
+      root.querySelector("[data-act=staff-pass]")?.focus();
+    });
+  } catch {
+    ui.staffBusy = false;
+    ui.staffError = "Couldn’t check that right now.";
+    render();
   }
 }
 
@@ -440,21 +533,15 @@ root.addEventListener("click", (e) => {
   if (!t) return;
   const act = t.getAttribute("data-act");
 
-  if (act === "tab-case") {
+  if (act === "logo-tap") {
+    onLogoTap();
+    return;
+  }
+  if (act === "go-case") {
     goCase();
     return;
   }
-  if (act === "tab-manager") {
-    goManager();
-    return;
-  }
-  if (act === "pin") {
-    const k = t.getAttribute("data-k");
-    if (k === "del") ui.pin = ui.pin.slice(0, -1);
-    else if (ui.pin.length < 4) ui.pin += k;
-    ui.pinError = false;
-    if (ui.pin.length === 4) submitPin();
-    else render();
+  if (act === "staff-submit") {
     return;
   }
   if (act === "tap-pan") {
@@ -509,12 +596,32 @@ root.addEventListener("click", (e) => {
   }
 });
 
+root.addEventListener("submit", (e) => {
+  const act = e.target.getAttribute && e.target.getAttribute("data-act");
+  if (act === "staff-form") {
+    e.preventDefault();
+    submitPassword();
+  }
+  if (act === "add-form") {
+    e.preventDefault();
+  }
+});
+
 root.addEventListener("input", (e) => {
   const t = e.target;
   const act = t.getAttribute("data-act");
   if (act === "search") {
     ui.search = t.value;
     render();
+  }
+  if (act === "staff-pass") {
+    ui.password = t.value;
+    if (ui.staffError) {
+      ui.staffError = "";
+      const err = root.querySelector(".staff-error");
+      if (err) err.textContent = "";
+      root.querySelector(".staff")?.classList.remove("shake");
+    }
   }
   if (act === "add-name") ui.add.name = t.value;
   if (act === "add-note") ui.add.note = t.value;
@@ -558,7 +665,7 @@ window.addEventListener("janartys-remote-swap", (e) => {
 });
 
 window.addEventListener("hashchange", () => {
-  if (location.hash.includes("manager")) goManager();
+  if (isStaffRoute()) goStaff();
   else goCase();
 });
 
@@ -569,7 +676,7 @@ setInterval(() => {
   }
 }, 15000);
 
-if (location.hash.includes("manager")) goManager();
+if (isStaffRoute()) goStaff();
 else {
   ui.view = "case";
   render();
