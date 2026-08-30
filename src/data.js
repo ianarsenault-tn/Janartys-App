@@ -154,6 +154,6 @@ export const SEED_CASE = [
 export const FAVORITE_IDS = ["double-chocolate", "andes-mint", "vanilla-bean"];
 
 export const STAFF_PASSWORD_HASH =
-  "cb1b47c36e5d72daf3a5b65851b66f9f8f569aea98534637389691b4f900cac0";
+  "e971c330aab8741082ab062c2d63f754238c6f46aac59291b07beff6b5a87dd7";
 export const STORAGE_KEY = "janartys-case-v1";
-export const STAFF_SESSION_KEY = "janartys-staff-v2";
+export const STAFF_SESSION_KEY = "janartys-staff-v3";
