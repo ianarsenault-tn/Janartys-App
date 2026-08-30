@@ -153,6 +153,7 @@ export const SEED_CASE = [
 
 export const FAVORITE_IDS = ["double-chocolate", "andes-mint", "vanilla-bean"];
 
-export const PIN = "2018";
+export const STAFF_PASSWORD_HASH =
+  "cb1b47c36e5d72daf3a5b65851b66f9f8f569aea98534637389691b4f900cac0";
 export const STORAGE_KEY = "janartys-case-v1";
-export const PIN_SESSION_KEY = "janartys-manager";
+export const STAFF_SESSION_KEY = "janartys-staff-v2";
