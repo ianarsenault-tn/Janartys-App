@@ -1,29 +1,35 @@
-# Janartys App
+# Janartys Whats Out
 
-Live ice cream case for Janarty's Homemade Ice Cream in Smyrna, TN.
+Playable mobile-first web app for Janartys Homemade Ice Cream (Smyrna).
 
-Customers see What's Out (today's eight pans). Staff swap a pan behind a PIN, and can add new flavors to the catalog. No cart, no ordering. The product is the case.
+One live case of 8 pans. Customers see Whats Out. Staff swap a pan behind a PIN.
 
-Repo: https://github.com/ianarsenault-tn/Janartys-App
+No cart, no loyalty, no ordering. The product is the case.
 
 ## Run
 
-    npm install
-    npm run dev
+Install dependencies, then start the Vite dev server.
 
-Open the URL Vite prints. On a phone it fills the screen. On a computer it shows as a phone-width column.
+## How to tap through
 
-## Try it
+1. Customer Whats Out is the default. Eight cards, dairy-free chips, just-out on the last swap.
+2. Tap Manager. PIN is 2018.
+3. Tap a pan. Pick a replacement from the catalog (flavors already in the case are hidden). Tap Swap pan.
+4. A manager toast fires, then the app jumps back to Whats Out with "{flavor} just came out" and the new card on the board.
+5. Add flavor (manager): name, note, dairy-free, scoop color. It lands in the catalog so you can swap it in.
 
-1. What's Out is the home screen.
-2. Tap Manager. PIN is **2018**.
-3. Tap a pan, pick a replacement, tap Swap pan. Customers get a toast.
-4. Add flavor (name, note, dairy-free, color), then swap it into the case.
+On desktop the app is a 393px phone column, centered on cream.
 
-Open a second tab at the same URL: a swap in one tab updates the other.
+Open a second tab to the same URL: a swap in one tab toasts and updates the eight cards in the other (localStorage plus storage events).
 
-## Seed case
+## Data
+
+One source of truth: in-memory store mirrored to localStorage key janartys-case-v1. Refresh keeps the case. Clear that key to restore the seed catalog and opening eight:
 
 Double Chocolate, Andes Mint, Campfire, Thai Tea, Strawberries and Cream, Coffee (8th and Roast), Okinawa Sweet Potato, Butter Pecan.
 
-Clear localStorage key janartys-case-v1 to restore the seed.
+Manager unlock lasts for the browser tab (sessionStorage). Close the tab to require the PIN again.
+
+## Stack
+
+Vite plus vanilla JS. Mockups and brand tokens live in /workspace/janartys-research/mockups/.
