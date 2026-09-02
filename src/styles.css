@@ -1,1 +1,123 @@
-PLACEHOLDER_CSS
+:root {
+  --black: #000000;
+  --white: #ffffff;
+  --purple: #a948a6;
+  --periwinkle: #8b6bf0;
+  --pale: #f7e9ea;
+  --cream: #fff8f0;
+  --gold: #d4a017;
+  --chocolate: #4a2c1a;
+  --ink: #1a1210;
+  --muted: #6b5b56;
+  --line: rgba(74, 44, 26, 0.08);
+  --heading: "Montserrat", "Aktiv Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+  --body: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --serif: "Fraunces", Georgia, serif;
+  --phone: 393px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(169, 72, 166, 0.08), transparent 50%),
+    var(--cream);
+  color: var(--ink);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button, input, textarea {
+  font-family: inherit;
+}
+
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.45; }
+
+#app {
+  width: min(100%, var(--phone));
+  height: 100dvh;
+  max-height: 852px;
+  background: var(--cream);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 24px 48px rgba(26, 18, 16, 0.12),
+    0 60px 120px rgba(26, 18, 16, 0.1);
+}
+
+/* Every current iPhone, including 16 Pro Max (440pt) and landscape.
+   iPad stays the centered phone mock until we design a tablet layout. */
+@media (max-width: 500px), (max-height: 500px) {
+  body {
+    background: var(--cream);
+    align-items: stretch;
+    justify-content: stretch;
+  }
+  #app {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100dvh;
+    min-height: 100dvh;
+    box-shadow: none;
+    border-radius: 0;
+  }
+}
+
+html.is-native,
+html.is-native body {
+  background: var(--cream);
+  align-items: stretch;
+  justify-content: stretch;
+}
+html.is-native #app {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  height: 100dvh;
+  min-height: 100%;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.screen {
+  flex: 1;
+  scroll-padding-top: env(safe-area-inset-top);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #f7e9ea 0%, var(--cream) 90px, var(--cream) 100%);
+  position: relative;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+#app.has-sheet .screen {
+  filter: blur(8px);
+  -webkit-filter: blur(8px);
+  transform: scale(1.02);
+  animation: frostIn 0.32s ease;
+  pointer-events: none;
+}
+#app.has-sheet .screen.thaw {
+  animation: frostOut 0.28s ease forwards;
+}
+@keyframes frostIn {
+  from { filter: blur(0); -webkit-filter: blur(0); transform: scale(1); }
+  to { filter: blur(8px); -webkit-filter: blur(8px); transform: scale(1.02); }
+}
+@keyframes frostOut {
+  from { filter: blur(8px); -webkit-filter: blur(8px); transform: scale(1.02); }
+  to { filter: blur(0); -webkit-filter: blur(0); transform: scale(1); }
+}
