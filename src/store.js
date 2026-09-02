@@ -48,14 +48,19 @@ function cloneInstagram(ig = SEED_INSTAGRAM) {
   };
 }
 
+function byFlavorName(a, b) {
+  return a.name.localeCompare(b.name, "en", { sensitivity: "base" });
+}
+
 function mergeSeedCatalog(catalog) {
   const ids = new Set(catalog.map((f) => f.id));
   const extra = SEED_CATALOG.filter((s) => !ids.has(s.id)).map((f) => ({
     ...f,
     tags: Array.isArray(f.tags) ? [...f.tags] : [],
   }));
-  if (!extra.length) return { catalog, added: 0 };
-  return { catalog: [...catalog, ...extra], added: extra.length };
+  const next = extra.length ? [...catalog, ...extra] : [...catalog];
+  next.sort(byFlavorName);
+  return { catalog: next, added: extra.length };
 }
 
 function hydrateFlavor(f) {
@@ -83,7 +88,7 @@ function seedState() {
     catalog: SEED_CATALOG.map((f) => ({
       ...f,
       tags: Array.isArray(f.tags) ? [...f.tags] : [],
-    })),
+    })).sort(byFlavorName),
     caseIds: [...SEED_CASE],
     updatedAt: Date.now(),
     lastSwap: null,
@@ -415,7 +420,7 @@ export function getShopStatus(nowDate = new Date()) {
         detail,
         todayLine,
       };
-    }
+  }
   }
 
   const next = nextOpen(clock);
@@ -544,7 +549,7 @@ export function addFlavor({ name, note, dairyFree, color }) {
   };
   state = {
     ...state,
-    catalog: [...state.catalog, flavor],
+    catalog: [...state.catalog, flavor].sort(byFlavorName),
     updatedAt: Date.now(),
   };
   persistLocalAndPush();
@@ -554,7 +559,7 @@ export function addFlavor({ name, note, dairyFree, color }) {
 export function availableForSwap(exceptSlot) {
   const inCase = new Set(state.caseIds);
   if (exceptSlot != null) inCase.delete(state.caseIds[exceptSlot]);
-  return state.catalog.filter((f) => !inCase.has(f.id));
+  return state.catalog.filter((f) => !inCase.has(f.id)).sort(byFlavorName);
 }
 
 window.addEventListener("storage", (e) => {
