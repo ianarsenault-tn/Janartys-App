@@ -22,10 +22,70 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        animation: splashScreen 2.4s ease forwards;
       }
-      #splash .splash-mark,
-      #splash .splash-name,
-      #splash .splash-tag { opacity: 0; }
+      .splash-bar {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #3b82f6, #a948a6 40%, #e83e8c 75%, #8b6bf0);
+      }
+      .splash-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-bottom: 8vh;
+      }
+      .splash-mark {
+        width: 92px;
+        height: 110px;
+        opacity: 0;
+        transform: scale(0.96);
+        animation: splashLogo 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      .splash-name {
+        font-family: Montserrat, -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 700;
+        font-size: 34px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #fff;
+        margin: 28px 0 0;
+        line-height: 1;
+        opacity: 0;
+        animation: splashFade 0.8s ease 0.28s forwards;
+      }
+      .splash-tag {
+        font-family: Montserrat, -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 500;
+        font-size: 10px;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.92);
+        margin-top: 12px;
+        opacity: 0;
+        animation: splashFade 0.75s ease 0.46s forwards;
+      }
+      @keyframes splashLogo {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes splashFade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes splashScreen {
+        0%, 76% { opacity: 1; }
+        100% { opacity: 0; visibility: hidden; pointer-events: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .splash-mark, .splash-name, .splash-tag {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
+        #splash { animation: splashScreen 0.7s ease 0.35s forwards; }
+      }
     </style>
   </head>
   <body>
@@ -50,6 +110,24 @@
       </div>
     </div>
     <div id="app"></div>
+    <script>
+      (function () {
+        var splash = document.getElementById("splash");
+        if (!splash) return;
+        var theme = document.querySelector('meta[name="theme-color"]');
+        var done = false;
+        function finish() {
+          if (done) return;
+          done = true;
+          splash.remove();
+          if (theme) theme.setAttribute("content", "#FFF8F0");
+        }
+        splash.addEventListener("animationend", function (e) {
+          if (e.animationName === "splashScreen") finish();
+        });
+        setTimeout(finish, 2800);
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
