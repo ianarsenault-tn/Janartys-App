@@ -1,15 +1,27 @@
 import "./styles.css";
-import { FAVORITE_IDS, STAFF_PASSWORD_HASH, STAFF_SESSION_KEY } from "./data.js";
+import {
+  FAVORITE_IDS,
+  HOURS_BLURB,
+  SHOP_MAPS_URL,
+  SHOP_PHONE_TEL,
+  STAFF_PASSWORD_HASH,
+  STAFF_SESSION_KEY,
+} from "./data.js";
 import {
   addFlavor,
   availableForSwap,
   caseFlavors,
+  chicagoDate,
+  clearHoursOverride,
   flavorById,
   getInstagram,
+  getShopStatus,
   getState,
+  hoursMode,
   resetInstagram,
   scoopFromHex,
   sendNotice,
+  setHoursOverride,
   setInstagram,
   subscribe,
   swapPan,
@@ -29,7 +41,8 @@ const ui = {
   selectedPan: null,
   pickId: null,
   search: "",
-  sheet: null, // null | swap | add
+  sheet: null, // null | swap | add | story | hours
+  storyId: null,
   password: "",
   staffError: "",
   staffBusy: false,
@@ -178,6 +191,7 @@ async function sha256Hex(text) {
 function goCase() {
   ui.view = "case";
   ui.sheet = null;
+  ui.storyId = null;
   ui.selectedPan = null;
   ui.pickId = null;
   ui.search = "";
@@ -188,6 +202,7 @@ function goCase() {
 }
 
 function goStaff() {
+  ui.storyId = null;
   if (!isStaffUnlocked()) {
     ui.view = "login";
     ui.password = "";
@@ -276,10 +291,50 @@ function toastHtml() {
   </div>`;
 }
 
+function flavorTagsHtml(f) {
+  const tags = [`<span class="story-tag gf">Gluten free</span>`];
+  if (f.dairyFree) tags.push(`<span class="story-tag df">Dairy-free</span>`);
+  for (const t of f.tags || []) {
+    tags.push(`<span class="story-tag">${esc(t)}</span>`);
+  }
+  return tags.join("");
+}
+
+function renderStorySheet() {
+  const f = flavorById(ui.storyId);
+  if (!f) return "";
+  return `
+    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet story-sheet" aria-label="${esc(f.name)}">
+      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+      <div class="sheet-kicker">On the board</div>
+      <span class="story-scoop" style="background: ${esc(f.scoopColor)}"></span>
+      <div class="sheet-title">${esc(f.name)}</div>
+      <p class="story-body">${esc(f.story || f.note)}</p>
+      <div class="story-tags">${flavorTagsHtml(f)}</div>
+    </aside>
+  `;
+}
+
+function renderHoursSheet() {
+  const status = getShopStatus();
+  return `
+    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet hours-sheet" aria-label="Hours">
+      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+      <div class="sheet-kicker">Hours</div>
+      <div class="sheet-title">When we’re here</div>
+      <p class="story-body">${esc(HOURS_BLURB)}</p>
+      <p class="hours-today">${esc(status.todayLine)}</p>
+    </aside>
+  `;
+}
+
 function renderCase() {
   const state = getState();
   const flavors = caseFlavors();
   const freshId = state.lastSwap?.inId;
+  const status = getShopStatus();
   const cards = flavors
     .map((f, i) => {
       const fresh = f.id === freshId;
@@ -287,7 +342,7 @@ function renderCase() {
         ? `<span class="card-chip">Dairy-free</span>`
         : "";
       const badge = fresh ? `<span class="just-out">Just out</span>` : "";
-      return `<article class="card ${fresh ? "fresh pop" : ""}" data-slot="${i}">
+      return `<button class="card ${fresh ? "fresh pop" : ""}" type="button" data-act="open-story" data-id="${esc(f.id)}" data-slot="${i}" aria-label="${esc(f.name)} — flavor story">
         ${badge}
         <div class="card-top">
           <span class="scoop" style="background: ${esc(f.scoopColor)}"></span>
@@ -295,9 +350,13 @@ function renderCase() {
         </div>
         <p class="card-note">${esc(f.note)}</p>
         ${chip}
-      </article>`;
+      </button>`;
     })
     .join("");
+
+  let sheet = "";
+  if (ui.sheet === "story") sheet = renderStorySheet();
+  if (ui.sheet === "hours") sheet = renderHoursSheet();
 
   root.innerHTML = `
     <div class="screen">
@@ -314,13 +373,21 @@ function renderCase() {
         <div class="hero-kicker">Janarty’s · Smyrna</div>
         <h1 class="hero-title">Today’s case</h1>
         <div class="hero-row">
-          <span class="chip chip-open"><span class="dot"></span>Open · until 9pm</span>
+          <span class="chip ${status.open ? "chip-open" : "chip-closed"}" data-status-chip>
+            <span class="dot"></span>${esc(status.label)}
+          </span>
           <span class="chip chip-gf">100% gluten free</span>
         </div>
+      </div>
+      <div class="visit">
+        <a class="visit-act" href="tel:${esc(SHOP_PHONE_TEL)}">Call</a>
+        <a class="visit-act" href="${esc(SHOP_MAPS_URL)}" target="_blank" rel="noopener noreferrer">Directions</a>
+        <button class="visit-act" type="button" data-act="open-hours">Hours</button>
       </div>
       <div class="case">${cards}</div>
       ${igCardHtml()}
     </div>
+    ${sheet}
     ${toastHtml()}
   `;
 }
@@ -494,6 +561,17 @@ function renderManager() {
       <div class="mgr-actions">
         <button class="ghost-btn" type="button" data-act="open-add">Add flavor</button>
       </div>
+      <section class="ig-mgr hours-mgr" aria-label="Today’s hours">
+        <div class="ig-mgr-kicker">Today’s hours</div>
+        <p class="hours-live">${esc(getShopStatus().label)}</p>
+        <p class="ig-mgr-sub">${esc(getShopStatus().todayLine)} · ${esc(getShopStatus().detail)}</p>
+        <div class="hours-btns">
+          <button class="hours-btn ${hoursMode() === "normal" ? "on" : ""}" type="button" data-act="hours-normal">Follow normal hours</button>
+          <button class="hours-btn ${hoursMode() === "closed" ? "on" : ""}" type="button" data-act="hours-closed">Closed today</button>
+          <button class="hours-btn ${hoursMode() === "open" ? "on" : ""}" type="button" data-act="hours-open">Open today</button>
+          <button class="hours-btn ${hoursMode() === "early" ? "on" : ""}" type="button" data-act="hours-early">Close at 7pm</button>
+        </div>
+      </section>
       <section class="ig-mgr notice-mgr" aria-label="Tell customers">
         <div class="ig-mgr-kicker">Tell customers</div>
         <p class="ig-mgr-sub">A short toast on What’s Out — same style as a pan swap.</p>
@@ -641,7 +719,46 @@ root.addEventListener("click", (e) => {
     ui.sheet = null;
     ui.selectedPan = null;
     ui.pickId = null;
+    ui.storyId = null;
     render();
+    return;
+  }
+  if (act === "open-story") {
+    ui.storyId = t.getAttribute("data-id");
+    ui.sheet = "story";
+    render();
+    return;
+  }
+  if (act === "open-hours") {
+    ui.sheet = "hours";
+    ui.storyId = null;
+    render();
+    return;
+  }
+  if (act === "hours-normal") {
+    clearHoursOverride();
+    return;
+  }
+  if (act === "hours-closed") {
+    setHoursOverride({ date: chicagoDate(), closed: true });
+    return;
+  }
+  if (act === "hours-open") {
+    setHoursOverride({
+      date: chicagoDate(),
+      closed: false,
+      open: "11:30",
+      close: "21:00",
+    });
+    return;
+  }
+  if (act === "hours-early") {
+    setHoursOverride({
+      date: chicagoDate(),
+      closed: false,
+      open: "11:30",
+      close: "19:00",
+    });
     return;
   }
   if (act === "pick") {
@@ -803,6 +920,12 @@ setInterval(() => {
   if (ui.view === "case") {
     const meta = root.querySelector(".nav-meta");
     if (meta) meta.textContent = relativeTime(getState().updatedAt);
+    const chip = root.querySelector("[data-status-chip]");
+    if (chip) {
+      const status = getShopStatus();
+      chip.className = `chip ${status.open ? "chip-open" : "chip-closed"}`;
+      chip.innerHTML = `<span class="dot"></span>${esc(status.label)}`;
+    }
   }
 }, 15000);
 
