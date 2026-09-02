@@ -48,10 +48,6 @@ function cloneInstagram(ig = SEED_INSTAGRAM) {
   };
 }
 
-function byFlavorName(a, b) {
-  return a.name.localeCompare(b.name, "en", { sensitivity: "base" });
-}
-
 function mergeSeedCatalog(catalog) {
   const ids = new Set(catalog.map((f) => f.id));
   const extra = SEED_CATALOG.filter((s) => !ids.has(s.id)).map((f) => ({
@@ -326,7 +322,7 @@ function parseMinutes(hhmm) {
   return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
 
-function formatClock(hhmm) {
+export function formatClock(hhmm) {
   const [hStr, mStr] = String(hhmm).split(":");
   let h = Number(hStr);
   const m = Number(mStr) || 0;
@@ -385,7 +381,8 @@ export function hoursMode(date = new Date()) {
   const o = getHoursOverride(date);
   if (!o) return "normal";
   if (o.closed) return "closed";
-  if (o.close === "19:00") return "early";
+  if (o.mode === "close-at") return "early";
+  if (o.close && o.close !== "21:00") return "early";
   return "open";
 }
 
@@ -420,7 +417,7 @@ export function getShopStatus(nowDate = new Date()) {
         detail,
         todayLine,
       };
-  }
+    }
   }
 
   const next = nextOpen(clock);
@@ -554,6 +551,10 @@ export function addFlavor({ name, note, dairyFree, color }) {
   };
   persistLocalAndPush();
   return flavor;
+}
+
+function byFlavorName(a, b) {
+  return a.name.localeCompare(b.name, "en", { sensitivity: "base" });
 }
 
 export function availableForSwap(exceptSlot) {
