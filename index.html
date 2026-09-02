@@ -7,6 +7,7 @@
     <title>Janarty’s · What’s Out</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://images.squarespace-cdn.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap"
       rel="stylesheet"
@@ -30,56 +31,24 @@
         height: 3px;
         background: linear-gradient(90deg, #3b82f6, #a948a6 40%, #e83e8c 75%, #8b6bf0);
       }
-      .splash-brand {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding-bottom: 8vh;
-      }
-      .splash-mark {
-        width: 92px;
-        height: 110px;
+      .splash-lockup {
+        width: min(82vw, 340px);
+        height: auto;
+        display: block;
         opacity: 0;
-        transform: scale(0.96);
-        animation: splashLogo 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-      }
-      .splash-name {
-        font-family: Montserrat, -apple-system, BlinkMacSystemFont, sans-serif;
-        font-weight: 700;
-        font-size: 34px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #fff;
-        margin: 28px 0 0;
-        line-height: 1;
-        opacity: 0;
-        animation: splashFade 0.8s ease 0.28s forwards;
-      }
-      .splash-tag {
-        font-family: Montserrat, -apple-system, BlinkMacSystemFont, sans-serif;
-        font-weight: 500;
-        font-size: 10px;
-        letter-spacing: 0.32em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.92);
-        margin-top: 12px;
-        opacity: 0;
-        animation: splashFade 0.75s ease 0.46s forwards;
+        transform: scale(0.97);
+        animation: splashLogo 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
       @keyframes splashLogo {
-        from { opacity: 0; transform: scale(0.96); }
+        from { opacity: 0; transform: scale(0.97); }
         to { opacity: 1; transform: scale(1); }
-      }
-      @keyframes splashFade {
-        from { opacity: 0; }
-        to { opacity: 1; }
       }
       @keyframes splashScreen {
         0%, 76% { opacity: 1; }
         100% { opacity: 0; visibility: hidden; pointer-events: none; }
       }
       @media (prefers-reduced-motion: reduce) {
-        .splash-mark, .splash-name, .splash-tag {
+        .splash-lockup {
           animation: none;
           opacity: 1;
           transform: none;
@@ -89,25 +58,13 @@
     </style>
   </head>
   <body>
-    <div id="splash" role="img" aria-label="Janarty’s Homemade Ice Cream">
+    <div id="splash">
       <div class="splash-bar" aria-hidden="true"></div>
-      <div class="splash-brand">
-        <svg class="splash-mark" viewBox="0 0 64 76" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="splashCone" x1="10" y1="8" x2="54" y2="72" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#3B82F6"/>
-              <stop offset="0.42" stop-color="#A855F7"/>
-              <stop offset="1" stop-color="#E83E8C"/>
-            </linearGradient>
-          </defs>
-          <path stroke="url(#splashCone)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
-            d="M13.8 28.2 C13.8 19.2 21.2 13 29.2 13 C33 13 35.8 14.8 37.4 18 C39 14.8 41.8 13 45.6 13 C53.6 13 61 19.2 61 28.2 C61 37 54.2 44.6 37.4 55 C20.6 44.6 13.8 37 13.8 28.2 Z"/>
-          <path stroke="url(#splashCone)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
-            d="M24.2 61.2 L37.4 74.2 L50.6 61.2 Z"/>
-        </svg>
-        <p class="splash-name">JANARTY’S</p>
-        <p class="splash-tag">HOMEMADE ICE CREAM</p>
-      </div>
+      <img
+        class="splash-lockup"
+        src="https://images.squarespace-cdn.com/content/v1/6373c84849d6135c07860be8/f22d8770-c4f6-498a-a1a2-0d1646d06550/Janartys.png?format=750w"
+        alt="Janarty’s Homemade Ice Cream"
+      />
     </div>
     <div id="app"></div>
     <script>
