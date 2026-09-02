@@ -46,3 +46,16 @@ function justOutSwap() {
   if (Date.now() - at >= JUST_OUT_MS) return null;
   return swap;
 }
+
+function scheduleJustOutClear() {
+  clearTimeout(scheduleJustOutClear._t);
+  const swap = getState().lastSwap;
+  if (!swap?.at) return;
+  const at = typeof swap.at === "number" ? swap.at : Date.parse(swap.at);
+  if (!Number.isFinite(at)) return;
+  const left = JUST_OUT_MS - (Date.now() - at);
+  if (left <= 0) return;
+  scheduleJustOutClear._t = setTimeout(() => {
+    if (ui.view === "case") render();
+  }, left + 30);
+}
