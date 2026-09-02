@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#FFF8F0" />
+    <meta name="theme-color" content="#000000" />
     <title>Janarty’s · What’s Out</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,8 +11,44 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    <style>
+      html, body { margin: 0; background: #000; }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #splash .splash-mark,
+      #splash .splash-name,
+      #splash .splash-tag { opacity: 0; }
+    </style>
   </head>
   <body>
+    <div id="splash" role="img" aria-label="Janarty’s Homemade Ice Cream">
+      <div class="splash-bar" aria-hidden="true"></div>
+      <div class="splash-brand">
+        <svg class="splash-mark" viewBox="0 0 64 76" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="splashCone" x1="10" y1="8" x2="54" y2="72" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#3B82F6"/>
+              <stop offset="0.42" stop-color="#A855F7"/>
+              <stop offset="1" stop-color="#E83E8C"/>
+            </linearGradient>
+          </defs>
+          <path stroke="url(#splashCone)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
+            d="M13.8 28.2 C13.8 19.2 21.2 13 29.2 13 C33 13 35.8 14.8 37.4 18 C39 14.8 41.8 13 45.6 13 C53.6 13 61 19.2 61 28.2 C61 37 54.2 44.6 37.4 55 C20.6 44.6 13.8 37 13.8 28.2 Z"/>
+          <path stroke="url(#splashCone)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
+            d="M24.2 61.2 L37.4 74.2 L50.6 61.2 Z"/>
+        </svg>
+        <p class="splash-name">JANARTY’S</p>
+        <p class="splash-tag">HOMEMADE ICE CREAM</p>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
