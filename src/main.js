@@ -36,40 +36,14 @@ const ui = {
   logoTapAt: 0,
 };
 
-let uid = 0;
 function coneSvg(cls = "nav-mark") {
-  const id = `coneG${++uid}`;
-  return `<svg class="${cls}" viewBox="0 0 64 76" fill="none" aria-hidden="true">
-    <defs>
-      <linearGradient id="${id}" x1="32" y1="8" x2="32" y2="74" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#3B82F6"/>
-        <stop offset="0.48" stop-color="#E83E8C"/>
-        <stop offset="1" stop-color="#7B2CBF"/>
-      </linearGradient>
-    </defs>
-    <path stroke="url(#${id})" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
-      d="M13.8 28.2 C13.8 19.2 21.2 13 29.2 13 C33 13 35.8 14.8 37.4 18 C39 14.8 41.8 13 45.6 13 C53.6 13 61 19.2 61 28.2 C61 37 54.2 44.6 37.4 55 C20.6 44.6 13.8 37 13.8 28.2 Z"/>
-    <path stroke="url(#${id})" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
-      d="M24.2 61.2 L37.4 74.2 L50.6 61.2 Z"/>
-  </svg>`;
+  return `<span class="${cls}" aria-hidden="true"></span>`;
 }
 
 function toastCone() {
-  const id = `coneT${++uid}`;
-  return `<svg class="toast-mark" viewBox="0 0 64 76" fill="none" aria-hidden="true">
-    <defs>
-      <linearGradient id="${id}" x1="32" y1="8" x2="32" y2="74" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#7EB6FF"/>
-        <stop offset="0.48" stop-color="#FF7AB3"/>
-        <stop offset="1" stop-color="#C084FC"/>
-      </linearGradient>
-    </defs>
-    <path stroke="url(#${id})" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"
-      d="M13.8 28.2 C13.8 19.2 21.2 13 29.2 13 C33 13 35.8 14.8 37.4 18 C39 14.8 41.8 13 45.6 13 C53.6 13 61 19.2 61 28.2 C61 37 54.2 44.6 37.4 55 C20.6 44.6 13.8 37 13.8 28.2 Z"/>
-    <path stroke="url(#${id})" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"
-      d="M24.2 61.2 L37.4 74.2 L50.6 61.2 Z"/>
-  </svg>`;
+  return `<span class="toast-mark" aria-hidden="true"></span>`;
 }
+
 
 function esc(s) {
   return String(s ?? "")
