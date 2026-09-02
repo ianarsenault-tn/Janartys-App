@@ -1,0 +1,26 @@
+.hours-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 10px 0 14px;
+}
+.hours-close-time {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  min-height: 44px;
+  min-width: 6.2em;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.hours-close-time::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+}
