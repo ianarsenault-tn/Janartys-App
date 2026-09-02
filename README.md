@@ -33,7 +33,7 @@ npm run build
 
 On desktop the app is a 393px phone column, centered on cream.
 
-Open a second tab to the same URL: a swap in one tab toasts and updates the eight cards in the other (localStorage plus storage events).
+Open two browsers (or a phone and a laptop) to the live app: a swap, notice, hours override, or Instagram save on one updates the other through Firestore. Same-browser tabs still cache in localStorage.
 
 ## iOS (Xcode)
 
@@ -62,7 +62,15 @@ App icon: if Xcode still shows the default Capacitor icon, drop `public/heart-ic
 
 ## Data
 
-One source of truth: in-memory store mirrored to localStorage key janartys-case-v1. Refresh keeps the case. Clear that key to restore the seed catalog and opening eight:
+Live source of truth is Firestore document `shop/live` (Firebase project janarty-s): catalog, eight pan ids, last swap, last notice, hours override, Instagram card. Phones stay in sync.
+
+localStorage key janartys-case-v1 is a cache and offline fallback. If Firestore is unreachable the app still works on that cache. If `shop/live` does not exist yet, the first load or Manager write seeds it from the opening catalog.
+
+Publish the rules in FIRESTORE.md (Firebase Console → Firestore → Rules → Publish) or production mode blocks writes.
+
+Clear the localStorage key to drop the cache; the live doc still wins on the next snapshot.
+
+Opening eight:
 
 Double Chocolate, Andes Mint, Campfire, Thai Tea, Strawberries and Cream, Coffee (8th and Roast), Okinawa Sweet Potato, Butter Pecan.
 
@@ -70,4 +78,4 @@ Staff unlock lasts for the browser tab (sessionStorage). Close the tab to requir
 
 ## Stack
 
-Vite plus vanilla JS, wrapped with Capacitor for iOS. Mockups and brand tokens live in /workspace/janartys-research/mockups/.
+Vite plus vanilla JS, Firebase Firestore for the live case, wrapped with Capacitor for iOS. Mockups and brand tokens live in /workspace/janartys-research/mockups/.

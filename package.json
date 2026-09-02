@@ -17,6 +17,7 @@
   "dependencies": {
     "@capacitor/core": "^8.5.1",
     "@capacitor/splash-screen": "^8.0.2",
-    "@capacitor/status-bar": "^8.0.3"
+    "@capacitor/status-bar": "^8.0.3",
+    "firebase": "^12.18.0"
   }
 }
