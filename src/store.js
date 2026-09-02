@@ -18,6 +18,7 @@ function seedState() {
     caseIds: [...SEED_CASE],
     updatedAt: Date.now(),
     lastSwap: null,
+    lastNotice: null,
     instagram: cloneInstagram(SEED_INSTAGRAM),
   };
 }
@@ -36,6 +37,7 @@ function load() {
       caseIds: parsed.caseIds,
       updatedAt: parsed.updatedAt || Date.now(),
       lastSwap: parsed.lastSwap || null,
+      lastNotice: parsed.lastNotice || null,
       instagram: parsed.instagram
         ? cloneInstagram(parsed.instagram)
         : cloneInstagram(SEED_INSTAGRAM),
@@ -133,6 +135,22 @@ export function swapPan(slot, inId) {
   return true;
 }
 
+export function sendNotice(message) {
+  const trimmed = String(message ?? "").trim();
+  if (!trimmed) return null;
+  const notice = {
+    message: trimmed.slice(0, 100),
+    at: Date.now(),
+  };
+  state = {
+    ...state,
+    lastNotice: notice,
+  };
+  persist();
+  emit();
+  return notice;
+}
+
 function slugify(name) {
   const base = name
     .toLowerCase()
@@ -204,11 +222,13 @@ window.addEventListener("storage", (e) => {
     const parsed = JSON.parse(e.newValue);
     if (!Array.isArray(parsed.catalog) || !Array.isArray(parsed.caseIds)) return;
     const prevSwapAt = state.lastSwap?.at || 0;
+    const prevNoticeAt = state.lastNotice?.at || 0;
     state = {
       catalog: parsed.catalog,
       caseIds: parsed.caseIds,
       updatedAt: parsed.updatedAt || Date.now(),
       lastSwap: parsed.lastSwap || null,
+      lastNotice: parsed.lastNotice || null,
       instagram: parsed.instagram
         ? cloneInstagram(parsed.instagram)
         : cloneInstagram(SEED_INSTAGRAM),
@@ -217,6 +237,11 @@ window.addEventListener("storage", (e) => {
     if (state.lastSwap && state.lastSwap.at !== prevSwapAt) {
       window.dispatchEvent(
         new CustomEvent("janartys-remote-swap", { detail: state.lastSwap })
+      );
+    }
+    if (state.lastNotice && state.lastNotice.at !== prevNoticeAt) {
+      window.dispatchEvent(
+        new CustomEvent("janartys-remote-notice", { detail: state.lastNotice })
       );
     }
   } catch {
