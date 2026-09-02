@@ -4,7 +4,7 @@
   "webDir": "dist",
   "backgroundColor": "#000000",
   "server": { "androidScheme": "https" },
-  "ios": { "contentInset": "automatic", "preferredContentMode": "mobile" },
+  "ios": { "contentInset": "never", "preferredContentMode": "mobile" },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0,
