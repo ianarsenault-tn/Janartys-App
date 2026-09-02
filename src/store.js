@@ -1,4 +1,9 @@
 import {
+  doc,
+  onSnapshot,
+  setDoc,
+} from "firebase/firestore";
+import {
   HOURS_DETAIL,
   SEED_CATALOG,
   SEED_CASE,
@@ -7,8 +12,21 @@ import {
   SHOP_TZ,
   STORAGE_KEY,
 } from "./data.js";
+import { db } from "./firebase.js";
 
 const listeners = new Set();
+
+const LIVE_REF = doc(db, "shop", "live");
+
+const syncStatus = {
+  live: false,
+  writeError: null,
+};
+
+export function getSyncStatus() {
+  return syncStatus;
+}
+
 
 const DAY_NAMES = [
   "Sunday",
@@ -100,6 +118,113 @@ function emit() {
   for (const fn of listeners) fn(state);
 }
 
+function livePayload() {
+  return {
+    catalog: state.catalog.map((f) => ({
+      id: f.id,
+      name: f.name,
+      note: f.note || "",
+      story: f.story || f.note || "",
+      scoopColor: f.scoopColor || "",
+      dairyFree: Boolean(f.dairyFree),
+      color: f.color || null,
+      tags: Array.isArray(f.tags) ? f.tags : [],
+    })),
+    caseIds: [...state.caseIds],
+    updatedAt: state.updatedAt || Date.now(),
+    lastSwap: state.lastSwap || null,
+    lastNotice: state.lastNotice || null,
+    hoursOverride: state.hoursOverride || null,
+    instagram: cloneInstagram(state.instagram),
+  };
+}
+
+function applyRemote(data) {
+  if (!data || !Array.isArray(data.catalog) || !Array.isArray(data.caseIds)) {
+    return false;
+  }
+  if (data.caseIds.length !== 8) return false;
+  const prevSwapAt = state.lastSwap?.at || 0;
+  const prevNoticeAt = state.lastNotice?.at || 0;
+  state = {
+    catalog: data.catalog.map(hydrateFlavor),
+    caseIds: data.caseIds,
+    updatedAt: data.updatedAt || Date.now(),
+    lastSwap: data.lastSwap || null,
+    lastNotice: data.lastNotice || null,
+    instagram: data.instagram
+      ? cloneInstagram(data.instagram)
+      : cloneInstagram(SEED_INSTAGRAM),
+    hoursOverride: data.hoursOverride ?? null,
+  };
+  persist();
+  emit();
+  if (state.lastSwap && state.lastSwap.at !== prevSwapAt) {
+    window.dispatchEvent(
+      new CustomEvent("janartys-remote-swap", { detail: state.lastSwap })
+    );
+  }
+  if (state.lastNotice && state.lastNotice.at !== prevNoticeAt) {
+    window.dispatchEvent(
+      new CustomEvent("janartys-remote-notice", { detail: state.lastNotice })
+    );
+  }
+  return true;
+}
+
+async function pushLive() {
+  try {
+    await setDoc(LIVE_REF, livePayload());
+    if (syncStatus.writeError) {
+      syncStatus.writeError = null;
+      emit();
+    }
+  } catch (err) {
+    syncStatus.writeError = err;
+    emit();
+  }
+}
+
+function persistLocalAndPush() {
+  persist();
+  emit();
+  pushLive();
+}
+
+function startLiveSync() {
+  try {
+    if (typeof window !== "undefined" && window.__janartysLiveUnsub) {
+      window.__janartysLiveUnsub();
+    }
+    const unsub = onSnapshot(
+      LIVE_REF,
+      (snap) => {
+        if (!snap.exists()) {
+          setDoc(LIVE_REF, livePayload(), { merge: true }).catch(() => {
+            /* offline or rules not published yet */
+          });
+          return;
+        }
+        const wasLive = syncStatus.live;
+        syncStatus.live = true;
+        applyRemote(snap.data());
+        if (!wasLive) emit();
+      },
+      () => {
+        if (syncStatus.live) {
+          syncStatus.live = false;
+          emit();
+        }
+      }
+    );
+    if (typeof window !== "undefined") window.__janartysLiveUnsub = unsub;
+  } catch {
+    syncStatus.live = false;
+  }
+}
+
+startLiveSync();
+
 export function getState() {
   return state;
 }
@@ -136,8 +261,7 @@ export function setInstagram({ imageUrl, caption, permalink }) {
       updatedAt: Date.now(),
     },
   };
-  persist();
-  emit();
+  persistLocalAndPush();
 }
 
 export function resetInstagram() {
@@ -145,8 +269,7 @@ export function resetInstagram() {
     ...state,
     instagram: cloneInstagram({ ...SEED_INSTAGRAM, updatedAt: Date.now() }),
   };
-  persist();
-  emit();
+  persistLocalAndPush();
 }
 
 export function chicagoNow(date = new Date()) {
@@ -292,8 +415,7 @@ export function setHoursOverride(override) {
     ...state,
     hoursOverride: override,
   };
-  persist();
-  emit();
+  persistLocalAndPush();
 }
 
 export function clearHoursOverride() {
@@ -301,8 +423,7 @@ export function clearHoursOverride() {
     ...state,
     hoursOverride: null,
   };
-  persist();
-  emit();
+  persistLocalAndPush();
 }
 
 export function swapPan(slot, inId) {
@@ -329,8 +450,7 @@ export function swapPan(slot, inId) {
       at: Date.now(),
     },
   };
-  persist();
-  emit();
+  persistLocalAndPush();
   return true;
 }
 
@@ -345,8 +465,7 @@ export function sendNotice(message) {
     ...state,
     lastNotice: notice,
   };
-  persist();
-  emit();
+  persistLocalAndPush();
   return notice;
 }
 
@@ -408,8 +527,7 @@ export function addFlavor({ name, note, dairyFree, color }) {
     catalog: [...state.catalog, flavor],
     updatedAt: Date.now(),
   };
-  persist();
-  emit();
+  persistLocalAndPush();
   return flavor;
 }
 
