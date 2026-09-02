@@ -14,6 +14,8 @@ import {
   chicagoDate,
   clearHoursOverride,
   flavorById,
+  formatClock,
+  getHoursOverride,
   getInstagram,
   getShopStatus,
   getState,
@@ -95,6 +97,39 @@ function esc(s) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function closeAtValue() {
+  const o = getHoursOverride();
+  if (o && !o.closed && o.close) return o.close;
+  return "19:00";
+}
+
+function normalizeTime(value) {
+  const m = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h < 0 || h > 23 || min < 0 || min > 59) return "";
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+function applyClosingAt(hhmm) {
+  const close = normalizeTime(hhmm) || "19:00";
+  const o = getHoursOverride();
+  const same = o && !o.closed && o.mode === "close-at" && o.close === close;
+  setHoursOverride({
+    date: chicagoDate(),
+    closed: false,
+    open: "11:30",
+    close,
+    mode: "close-at",
+  });
+  if (same) return;
+  const notice = sendNotice(`Closing at ${formatClock(close)} tonight.`);
+  if (!notice) return;
+  ui.lastSeenNoticeAt = notice.at;
+  onNoticeSuccess(notice);
 }
 
 function safeHref(url) {
@@ -630,7 +665,10 @@ function renderManager() {
           <button class="hours-btn ${hoursMode() === "normal" ? "on" : ""}" type="button" data-act="hours-normal">Follow normal hours</button>
           <button class="hours-btn ${hoursMode() === "closed" ? "on" : ""}" type="button" data-act="hours-closed">Closed today</button>
           <button class="hours-btn ${hoursMode() === "open" ? "on" : ""}" type="button" data-act="hours-open">Open today</button>
-          <button class="hours-btn ${hoursMode() === "early" ? "on" : ""}" type="button" data-act="hours-early">Close at 7pm</button>
+          <label class="hours-btn hours-close ${hoursMode() === "early" ? "on" : ""}">
+            <span>Closing at</span>
+            <input class="hours-close-time" type="time" data-act="hours-close-at" value="${esc(closeAtValue())}" aria-label="Closing time" />
+          </label>
         </div>
       </section>
       <section class="ig-mgr notice-mgr" aria-label="Tell customers">
@@ -756,8 +794,31 @@ async function submitPassword() {
 
 root.addEventListener("click", (e) => {
   const t = e.target.closest("[data-act]");
-  if (!t) return;
+  if (!t) {
+    const closeWrap = e.target.closest(".hours-close");
+    if (closeWrap) {
+      const input = closeWrap.querySelector(".hours-close-time");
+      if (input && typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+        } catch {
+          /* picker already open or unsupported */
+        }
+      }
+    }
+    return;
+  }
   const act = t.getAttribute("data-act");
+  if (act === "hours-close-at") {
+    if (typeof t.showPicker === "function") {
+      try {
+        t.showPicker();
+      } catch {
+        /* picker already open or unsupported */
+      }
+    }
+    return;
+  }
 
   if (act === "logo-tap") {
     onLogoTap();
@@ -809,15 +870,6 @@ root.addEventListener("click", (e) => {
       closed: false,
       open: "11:30",
       close: "21:00",
-    });
-    return;
-  }
-  if (act === "hours-early") {
-    setHoursOverride({
-      date: chicagoDate(),
-      closed: false,
-      open: "11:30",
-      close: "19:00",
     });
     return;
   }
@@ -893,6 +945,12 @@ root.addEventListener("submit", (e) => {
     ui.lastSeenNoticeAt = notice.at;
     onNoticeSuccess(notice);
   }
+});
+
+root.addEventListener("change", (e) => {
+  const t = e.target;
+  const act = t.getAttribute && t.getAttribute("data-act");
+  if (act === "hours-close-at") applyClosingAt(t.value);
 });
 
 root.addEventListener("input", (e) => {
