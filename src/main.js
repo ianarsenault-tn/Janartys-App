@@ -21,20 +21,20 @@ const STAFF_LOCK_KEY = "janartys-staff-lock-until";
 const MAX_FAILS = 5;
 const LOCK_MS = 2 * 60 * 1000;
 const LOGO_TAPS_NEEDED = 7;
-const LOGO_TAP_GAP_MS = 1600;
+const LOGO_TAP_GAP_MS = 2800;
 
 const ui = {
-  view: "case",
+  view: "case", // case | login | manager
   selectedPan: null,
   pickId: null,
   search: "",
-  sheet: null,
+  sheet: null, // null | swap | add
   password: "",
   staffError: "",
   staffBusy: false,
-  toast: null,
+  toast: null, // { kind, html, sub }
   add: { name: "", note: "", dairyFree: false, color: "#A948A6" },
-  ig: null,
+  ig: null, // { imageUrl, caption, permalink } draft in Manager
   lastSeenSwapAt: 0,
   logoTaps: 0,
   logoTapAt: 0,
@@ -47,6 +47,7 @@ function coneSvg(cls = "nav-mark") {
 function toastCone() {
   return `<span class="toast-mark" aria-hidden="true"></span>`;
 }
+
 
 function esc(s) {
   return String(s ?? "")
