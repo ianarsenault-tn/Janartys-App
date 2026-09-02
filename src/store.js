@@ -1,1 +1,5 @@
-PLACEHOLDER_STORE
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+} from "firebase/firestore";

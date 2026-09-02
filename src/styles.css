@@ -1,1 +1,17 @@
-PLACEHOLDER_STYLES
+:root {
+  --black: #000000;
+  --white: #ffffff;
+  --purple: #a948a6;
+  --periwinkle: #8b6bf0;
+  --pale: #f7e9ea;
+  --cream: #fff8f0;
+  --gold: #d4a017;
+  --chocolate: #4a2c1a;
+  --ink: #1a1210;
+  --muted: #6b5b56;
+  --line: rgba(74, 44, 26, 0.08);
+  --heading: "Montserrat", "Aktiv Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+  --body: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --serif: "Fraunces", Georgia, serif;
+  --phone: 393px;
+}
