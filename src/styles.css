@@ -66,6 +66,7 @@ button:disabled { cursor: default; opacity: 0.45; }
 
 .screen {
   flex: 1;
+  scroll-padding-top: env(safe-area-inset-top);
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -115,6 +116,21 @@ button:disabled { cursor: default; opacity: 0.45; }
   color: var(--muted);
   margin-top: 2px;
   letter-spacing: -0.01em;
+}
+.nav-live {
+  display: inline;
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.65;
+}
+.sync-warn {
+  padding: 0 20px 10px;
+  font-size: 13px;
+  color: var(--muted);
 }
 .nav-kicker {
   font-family: var(--heading);
@@ -299,15 +315,20 @@ button:disabled { cursor: default; opacity: 0.45; }
   align-items: center;
 }
 .just-out {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+  align-self: flex-start;
+  margin-bottom: 6px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
   font-family: var(--heading);
   font-weight: 700;
-  font-size: 8px;
-  letter-spacing: 0.08em;
+  font-size: 9px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: #3a2a0a;
+  background: #f3d27a;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ── Staff case ──────────────────────────────────────── */
