@@ -67,7 +67,7 @@ const ui = {
   selectedPan: null,
   pickId: null,
   search: "",
-  sheet: null, // null | swap | add | story | hours
+  sheet: null, // null | swap | add | story | hours | maps
   storyId: null,
   password: "",
   staffError: "",
@@ -422,6 +422,27 @@ function renderHoursSheet() {
   `;
 }
 
+function renderMapsSheet() {
+  const apple = SHOP_MAPS_URL.replace("?q=", "?daddr=");
+  const google =
+    "https://www.google.com/maps/dir/?api=1&destination=111%20Front%20Street%2C%20Smyrna%2C%20TN%2037167";
+  const waze =
+    "https://waze.com/ul?q=111%20Front%20Street%20Smyrna%20TN&navigate=yes";
+  return `
+    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet maps-sheet" aria-label="Get directions">
+      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+      <div class="sheet-kicker">111 Front Street</div>
+      <div class="sheet-title">Get directions</div>
+      <div class="maps-list">
+        <a class="maps-row" href="${esc(apple)}" target="_blank" rel="noopener noreferrer">Apple Maps</a>
+        <a class="maps-row" href="${esc(google)}" target="_blank" rel="noopener noreferrer">Google Maps</a>
+        <a class="maps-row" href="${esc(waze)}" target="_blank" rel="noopener noreferrer">Waze</a>
+      </div>
+    </aside>
+  `;
+}
+
 function renderCase() {
   const state = getState();
   const flavors = caseFlavors();
@@ -449,6 +470,7 @@ function renderCase() {
   let sheet = "";
   if (ui.sheet === "story") sheet = renderStorySheet();
   if (ui.sheet === "hours") sheet = renderHoursSheet();
+  if (ui.sheet === "maps") sheet = renderMapsSheet();
 
   root.innerHTML = `
     <div class="screen">
@@ -458,7 +480,7 @@ function renderCase() {
         </button>
         <div class="nav-copy">
           <h1 class="nav-title">Janarty’s</h1>
-          <div class="nav-meta">What’s out · Smyrna · <span data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span></div>
+          <div class="nav-meta">What’s out · <button class="nav-place" type="button" data-act="open-maps" aria-label="Directions to Janarty’s in Smyrna">Smyrna</button> · <span data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span></div>
         </div>
         <div class="nav-aside">
           ${getSyncStatus().live ? `<span class="nav-live">Live</span>` : `<span class="nav-live off">Offline</span>`}
@@ -476,7 +498,7 @@ function renderCase() {
       </div>
       <div class="visit">
         <a class="visit-act" href="tel:${esc(SHOP_PHONE_TEL)}">Call</a>
-        <a class="visit-act" href="${esc(SHOP_MAPS_URL)}" target="_blank" rel="noopener noreferrer">Directions</a>
+        <button class="visit-act" type="button" data-act="open-maps">Directions</button>
         <button class="visit-act" type="button" data-act="open-hours">Hours</button>
       </div>
       <div class="case">${cards}</div>
@@ -852,6 +874,12 @@ root.addEventListener("click", (e) => {
   }
   if (act === "open-hours") {
     ui.sheet = "hours";
+    ui.storyId = null;
+    render();
+    return;
+  }
+  if (act === "open-maps") {
+    ui.sheet = "maps";
     ui.storyId = null;
     render();
     return;
