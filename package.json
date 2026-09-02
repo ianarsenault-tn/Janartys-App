@@ -6,9 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
     "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
   }
 }

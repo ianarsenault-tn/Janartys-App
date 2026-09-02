@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+ios/App/Pods
+ios/App/Podfile.lock
+ios/DerivedData
+DerivedData
+*.xcuserstate
+xcuserdata/
