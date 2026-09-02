@@ -1,1 +1,1 @@
-PLACEHOLDER
+import "./app.js";
