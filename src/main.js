@@ -59,3 +59,23 @@ function scheduleJustOutClear() {
     if (ui.view === "case") render();
   }, left + 30);
 }
+
+const ui = {
+  view: "case", // case | login | manager
+  selectedPan: null,
+  pickId: null,
+  search: "",
+  sheet: null, // null | swap | add | story | hours
+  storyId: null,
+  password: "",
+  staffError: "",
+  staffBusy: false,
+  toast: null, // { kind, html, sub }
+  add: { name: "", note: "", dairyFree: false, color: "#A948A6" },
+  ig: null, // { imageUrl, caption, permalink } draft in Manager
+  notice: "",
+  lastSeenSwapAt: 0,
+  lastSeenNoticeAt: 0,
+  logoTaps: 0,
+  logoTapAt: 0,
+};
