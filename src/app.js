@@ -486,6 +486,11 @@ function renderCase() {
           ${getSyncStatus().live ? `<span class="nav-live">Live</span>` : `<span class="nav-live off">Offline</span>`}
         </div>
       </header>
+      <div class="visit">
+        <a class="visit-act" href="tel:${esc(SHOP_PHONE_TEL)}">Call</a>
+        <button class="visit-act" type="button" data-act="open-maps">Directions</button>
+        <button class="visit-act" type="button" data-act="open-hours">Hours</button>
+      </div>
       <div class="status-row">
         <button class="status-cell ${status.open ? "is-open" : "is-closed"}" type="button" data-act="open-hours" data-status-chip>
           <span class="status-kicker"><span class="dot"></span>${esc(status.headline)}</span>
@@ -495,11 +500,6 @@ function renderCase() {
           <span class="status-kicker">100% gluten free</span>
           <span class="status-detail">Every scoop</span>
         </div>
-      </div>
-      <div class="visit">
-        <a class="visit-act" href="tel:${esc(SHOP_PHONE_TEL)}">Call</a>
-        <button class="visit-act" type="button" data-act="open-maps">Directions</button>
-        <button class="visit-act" type="button" data-act="open-hours">Hours</button>
       </div>
       <div class="case">${cards}</div>
       ${igCardHtml()}
