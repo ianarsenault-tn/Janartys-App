@@ -400,8 +400,10 @@ function renderStorySheet() {
     <aside class="sheet story-sheet" aria-label="${esc(f.name)}">
       <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
       <div class="sheet-kicker">On the board</div>
-      <span class="story-scoop" style="background: ${esc(f.scoopColor)}"></span>
-      <div class="sheet-title">${esc(f.name)}</div>
+      <div class="story-head">
+        <span class="story-scoop" style="background: ${esc(f.scoopColor)}"></span>
+        <div class="sheet-title">${esc(f.name)}</div>
+      </div>
       <p class="story-body">${esc(f.story || f.note)}</p>
       <div class="story-tags">${flavorTagsHtml(f)}</div>
     </aside>
@@ -424,7 +426,9 @@ function renderHoursSheet() {
       <p class="story-body">${esc(HOURS_BLURB)}</p>
       <p class="hours-today">${esc(status.todayLine)}</p>
       <div class="hours-visit-label">Call</div>
-      <a class="maps-row" href="tel:${esc(SHOP_PHONE_TEL)}">615-918-0085</a>
+      <div class="maps-list">
+        <a class="maps-row" href="tel:${esc(SHOP_PHONE_TEL)}">615-918-0085</a>
+      </div>
       <div class="hours-visit-label">Directions</div>
       <p class="hours-addr">111 Front Street, Smyrna</p>
       <div class="maps-list">
@@ -494,7 +498,7 @@ function renderCase() {
         </button>
         <div class="nav-copy">
           <h1 class="nav-title">Janarty’s</h1>
-          <div class="nav-meta">What’s out · <button class="nav-place" type="button" data-act="open-maps" aria-label="Directions to Janarty’s in Smyrna">Smyrna</button> · <span data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span></div>
+          <div class="nav-meta">What’s out · <span data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span></div>
         </div>
         <div class="nav-aside">
           ${getSyncStatus().live ? `<span class="nav-live">Live</span>` : `<span class="nav-live off">Offline</span>`}
