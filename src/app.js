@@ -493,10 +493,13 @@ function renderCase() {
   root.innerHTML = `
     <div class="screen">
       <header class="nav brand">
-        <button class="nav-logo" type="button" data-act="logo-tap" aria-label="Janarty’s">
+        <button class="nav-logo" type="button" data-act="logo-tap" aria-label="Janarty’s Homemade Ice Cream">
           ${coneSvg()}
         </button>
-        <h1 class="nav-title">Janarty’s</h1>
+        <div class="nav-copy">
+          <h1 class="nav-title">Janarty’s</h1>
+          <div class="nav-tagline">Homemade Ice Cream</div>
+        </div>
         <div class="nav-aside">
           <div class="nav-screen">What’s out</div>
           <span class="nav-meta" data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span>
