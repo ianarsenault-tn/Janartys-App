@@ -1,6 +1,6 @@
 .nav.brand {
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding-bottom: 12px;
 }
 .nav.brand .nav-logo {
@@ -13,12 +13,25 @@
   height: 42px;
   flex: 0 0 48px;
 }
-.nav.brand .nav-title {
+.nav.brand .nav-copy {
   flex: 1;
   min-width: 0;
-  font-size: 24px;
-  letter-spacing: 0.02em;
+}
+.nav.brand .nav-title {
+  flex: none;
+  font-size: 22px;
+  letter-spacing: 0.04em;
   line-height: 1.05;
+}
+.nav.brand .nav-tagline {
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--purple);
+  line-height: 1.2;
+  margin-top: 3px;
 }
 .nav.brand .nav-aside {
   flex-direction: column;
@@ -27,6 +40,7 @@
   gap: 3px;
   padding: 0;
   text-align: right;
+  flex: 0 0 auto;
 }
 .nav.brand .nav-screen {
   font-family: var(--heading);
