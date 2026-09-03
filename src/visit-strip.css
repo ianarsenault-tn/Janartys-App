@@ -1,35 +1,151 @@
-.hours-sheet {
-  max-height: 86%;
+/* Shared drawer type + rhythm */
+.sheet {
+  padding-top: 6px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-.hours-sheet .hours-today {
-  margin: 0 0 16px;
+.grabber {
+  margin: 2px auto 16px;
 }
-.hours-visit-label {
-  font-family: var(--heading);
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 10px 0 8px;
-}
-.hours-addr {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--muted);
+.sheet-kicker {
+  font-size: 13px;
+  letter-spacing: 0.14em;
   margin: 0 0 8px;
 }
-.hours-sheet > .maps-row {
+.sheet-title {
+  font-size: 26px;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+  margin: 0 0 12px;
+}
+.story-body {
+  font-size: 18px;
+  line-height: 1.45;
+  margin: 0 0 12px;
+}
+.hours-today {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 22px;
+}
+.hours-visit-label,
+.sheet .fav-label,
+.sheet .field-label {
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 16px 0 10px;
+}
+.hours-visit-label:first-of-type {
+  margin-top: 0;
+}
+.hours-addr {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.story-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+.story-head .sheet-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.story-scoop {
+  width: 56px;
+  height: 56px;
+  margin: 0;
+  flex: 0 0 56px;
+}
+.story-tags {
+  gap: 8px;
+  margin: 4px 0 calc(22px + env(safe-area-inset-bottom));
+}
+.story-tag {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.story-sheet,
+.hours-sheet,
+.maps-sheet {
+  max-height: 88%;
+}
+.sheet .maps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 4px;
+}
+.sheet .maps-row {
+  min-height: 54px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: #f7f1ee;
+  box-shadow: none;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+.sheet .maps-row:last-child {
   margin-bottom: 0;
   padding-bottom: 0;
 }
-.hours-sheet .maps-row:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-.hours-sheet .maps-list:last-child .maps-row:last-child {
+.sheet .maps-list:last-child {
   margin-bottom: calc(18px + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
+}
+.sheet .row {
+  padding: 14px 2px;
+  min-height: 56px;
+  gap: 14px;
+}
+.sheet .row-name {
+  font-size: 17px;
+}
+.sheet .row-note {
+  font-size: 14px;
+  margin-top: 2px;
+}
+.sheet .row-check {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+.sheet .fav {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.sheet .swap-sub {
+  font-size: 13px;
+  margin-top: 10px;
+}
+.sheet .field-label {
+  margin-bottom: 8px;
+}
+.sheet .field {
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-size: 16px;
+}
+.sheet textarea.field {
+  height: 88px;
+  padding: 12px 14px;
+  font-size: 16px;
+}
+.sheet .check-row {
+  font-size: 16px;
+  min-height: 44px;
+}
+.sheet .empty-cat {
+  font-size: 15px;
+  padding: 20px 4px;
 }
