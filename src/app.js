@@ -410,6 +410,11 @@ function renderStorySheet() {
 
 function renderHoursSheet() {
   const status = getShopStatus();
+  const apple = SHOP_MAPS_URL.replace("?q=", "?daddr=");
+  const google =
+    "https://www.google.com/maps/dir/?api=1&destination=111%20Front%20Street%2C%20Smyrna%2C%20TN%2037167";
+  const waze =
+    "https://waze.com/ul?q=111%20Front%20Street%20Smyrna%20TN&navigate=yes";
   return `
     <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
     <aside class="sheet hours-sheet" aria-label="Hours">
@@ -418,6 +423,15 @@ function renderHoursSheet() {
       <div class="sheet-title">When we’re here</div>
       <p class="story-body">${esc(HOURS_BLURB)}</p>
       <p class="hours-today">${esc(status.todayLine)}</p>
+      <div class="hours-visit-label">Call</div>
+      <a class="maps-row" href="tel:${esc(SHOP_PHONE_TEL)}">615-918-0085</a>
+      <div class="hours-visit-label">Directions</div>
+      <p class="hours-addr">111 Front Street, Smyrna</p>
+      <div class="maps-list">
+        <a class="maps-row" href="${esc(apple)}" target="_blank" rel="noopener noreferrer">Apple Maps</a>
+        <a class="maps-row" href="${esc(google)}" target="_blank" rel="noopener noreferrer">Google Maps</a>
+        <a class="maps-row" href="${esc(waze)}" target="_blank" rel="noopener noreferrer">Waze</a>
+      </div>
     </aside>
   `;
 }
@@ -486,11 +500,6 @@ function renderCase() {
           ${getSyncStatus().live ? `<span class="nav-live">Live</span>` : `<span class="nav-live off">Offline</span>`}
         </div>
       </header>
-      <div class="visit">
-        <a class="visit-act" href="tel:${esc(SHOP_PHONE_TEL)}">Call</a>
-        <button class="visit-act" type="button" data-act="open-maps">Directions</button>
-        <button class="visit-act" type="button" data-act="open-hours">Hours</button>
-      </div>
       <div class="status-row">
         <button class="status-cell ${status.open ? "is-open" : "is-closed"}" type="button" data-act="open-hours" data-status-chip>
           <span class="status-kicker"><span class="dot"></span>${esc(status.headline)}</span>
