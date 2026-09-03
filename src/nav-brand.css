@@ -1,0 +1,48 @@
+.nav.brand {
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.nav.brand .nav-logo {
+  width: 60px;
+  height: 58px;
+  margin: -8px -4px -8px -8px;
+}
+.nav.brand .nav-logo .nav-mark {
+  width: 48px;
+  height: 42px;
+  flex: 0 0 48px;
+}
+.nav.brand .nav-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+.nav.brand .nav-aside {
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  text-align: right;
+}
+.nav.brand .nav-screen {
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--purple);
+  line-height: 1.2;
+}
+.nav.brand .nav-meta {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-align: right;
+}
