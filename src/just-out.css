@@ -1,0 +1,13 @@
+.just-out {
+  height: 20px;
+  padding: 0 10px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  background: linear-gradient(90deg, #5b8def, #c084fc 45%, #e83e8c);
+}
+.card.fresh {
+  box-shadow:
+    0 0 0 1.5px rgba(169, 72, 166, 0.55),
+    0 8px 18px rgba(169, 72, 166, 0.16);
+}
