@@ -492,16 +492,14 @@ function renderCase() {
 
   root.innerHTML = `
     <div class="screen">
-      <header class="nav">
+      <header class="nav brand">
         <button class="nav-logo" type="button" data-act="logo-tap" aria-label="Janarty’s">
           ${coneSvg()}
         </button>
-        <div class="nav-copy">
-          <h1 class="nav-title">Janarty’s</h1>
-          <div class="nav-meta">What’s out · <span data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span></div>
-        </div>
+        <h1 class="nav-title">Janarty’s</h1>
         <div class="nav-aside">
-          ${getSyncStatus().live ? `<span class="nav-live">Live</span>` : `<span class="nav-live off">Offline</span>`}
+          <div class="nav-screen">What’s out</div>
+          <span class="nav-meta" data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span>
         </div>
       </header>
       <div class="status-row">
