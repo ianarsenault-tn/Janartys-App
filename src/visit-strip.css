@@ -1,12 +1,35 @@
-.visit {
-  flex-shrink: 0;
-  min-height: 48px;
-  margin: 4px 16px 10px;
-  overflow: hidden;
+.hours-sheet {
+  max-height: 86%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
-.visit-act {
-  height: 48px;
-  min-height: 48px;
-  font-size: 13px;
-  letter-spacing: 0.08em;
+.hours-sheet .hours-today {
+  margin: 0 0 16px;
+}
+.hours-visit-label {
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 10px 0 8px;
+}
+.hours-addr {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.hours-sheet > .maps-row {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.hours-sheet .maps-row:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.hours-sheet .maps-list:last-child .maps-row:last-child {
+  margin-bottom: calc(18px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
 }
