@@ -1,1 +1,1 @@
-@/workspace/janartys-app/src/app.js
+x
