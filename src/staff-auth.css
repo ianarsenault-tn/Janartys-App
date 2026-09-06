@@ -26,3 +26,14 @@
 .staff-forgot:active {
   color: var(--ink);
 }
+
+
+.mgr-logout {
+  margin: 28px 16px 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.mgr-logout-btn {
+  min-width: 160px;
+}
