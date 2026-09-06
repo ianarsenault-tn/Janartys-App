@@ -1,1 +1,1 @@
-file:///workspace/janartys-app/src/app.js
+PLACEHOLDER_WILL_FAIL
