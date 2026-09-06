@@ -6,6 +6,7 @@ import { STAFF_SESSION_KEY } from "./data.js";
 import {
   signInStaff, staffAuthErrorMessage, whenAuthReady, resetStaffPassword, staffResetMessage,
 } from "./staff-auth.js";
+import { setupStaffIdleTimeout } from "./staff-idle.js";
 import {
   addFlavor,
   caseFlavors,
@@ -346,6 +347,19 @@ setInterval(() => {
   }
 }, 15000);
 
+
+setupStaffIdleTimeout({
+  isManagerActive: () => ui.view === "manager",
+  onTimeout: () => {
+    ui.password = "";
+    ui.sheet = null;
+    ui.selectedPan = null;
+    ui.pickId = null;
+    ui.staffError = "Signed out after 15 minutes idle.";
+    goStaff();
+  },
+});
+
 whenAuthReady().then(() => {
   if (isStaffRoute()) goStaff();
   else {
@@ -367,3 +381,4 @@ function setupNativeStatusBar() {
     .catch(() => {});
 }
 setupNativeStatusBar();
+
