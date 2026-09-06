@@ -4,3 +4,25 @@
 .staff-sub {
   margin-bottom: 14px;
 }
+.staff-forgot {
+  display: block;
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 10px 8px;
+  border: 0;
+  background: none;
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--purple);
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.staff-forgot:disabled {
+  opacity: 0.45;
+}
+.staff-forgot:active {
+  color: var(--ink);
+}
