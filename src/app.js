@@ -4,9 +4,14 @@ import {
   HOURS_BLURB,
   SHOP_MAPS_URL,
   SHOP_PHONE_TEL,
-  STAFF_PASSWORD_HASH,
   STAFF_SESSION_KEY,
 } from "./data.js";
+import {
+  isStaffSignedIn,
+  signInStaff,
+  staffAuthErrorMessage,
+  whenAuthReady,
+} from "./staff-auth.js";
 import {
   addFlavor,
   availableForSwap,
@@ -69,6 +74,7 @@ const ui = {
   search: "",
   sheet: null, // null | swap | add | story | hours | maps
   storyId: null,
+  email: "",
   password: "",
   staffError: "",
   staffBusy: false,
@@ -192,7 +198,12 @@ function isStaffRoute() {
 }
 
 function isStaffUnlocked() {
-  return sessionStorage.getItem(STAFF_SESSION_KEY) === "ok";
+  if (!isStaffSignedIn()) {
+    sessionStorage.removeItem(STAFF_SESSION_KEY);
+    return false;
+  }
+  sessionStorage.setItem(STAFF_SESSION_KEY, "ok");
+  return true;
 }
 
 function lockUntil() {
@@ -237,17 +248,6 @@ function clearFails() {
   sessionStorage.removeItem(STAFF_LOCK_KEY);
 }
 
-async function sha256Hex(text) {
-  const buf = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text)
-  );
-  return Array.from(new Uint8Array(buf), (b) =>
-    b.toString(16).padStart(2, "0")
-  ).join("");
-}
-
-
 function dismissSheet() {
   const sheet = root.querySelector(".sheet");
   const veil = root.querySelector(".veil");
@@ -287,6 +287,7 @@ function goCase() {
   ui.selectedPan = null;
   ui.pickId = null;
   ui.search = "";
+  ui.email = "";
   ui.password = "";
   ui.staffError = "";
   history.replaceState(null, "", "#/");
@@ -310,7 +311,7 @@ function goStaff() {
   render();
   if (ui.view === "login") {
     requestAnimationFrame(() => {
-      root.querySelector("[data-act=staff-pass]")?.focus();
+      root.querySelector("[data-act=staff-email]")?.focus();
     });
   }
 }
@@ -541,12 +542,16 @@ function renderLogin() {
         </div>
         <button class="nav-case" type="button" data-act="go-case">Case</button>
       </header>
-      <form class="staff ${shake}" data-act="staff-form" autocomplete="off">
-        <p class="staff-sub">Password for the case.</p>
+      <form class="staff ${shake}" data-act="staff-form" autocomplete="on">
+        <p class="staff-sub">Staff email and password for the case.</p>
+        <label class="sr-only" for="staff-email">Email</label>
+        <input class="field staff-email" id="staff-email" type="email" name="email"
+          autocomplete="username" inputmode="email" data-act="staff-email"
+          placeholder="Email" value="${esc(ui.email)}" ${disabled} />
         <label class="sr-only" for="staff-pass">Password</label>
         <input class="field staff-pass" id="staff-pass" type="password" name="password"
           autocomplete="current-password" data-act="staff-pass"
-          value="${esc(ui.password)}" ${disabled} />
+          placeholder="Password" value="${esc(ui.password)}" ${disabled} />
         <div class="staff-error">${esc(err)}</div>
         <button class="primary-btn staff-go" type="submit" data-act="staff-submit" ${disabled}>
           Unlock
@@ -761,9 +766,11 @@ function render() {
   const restoreIg = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("ig-");
   const restoreNotice = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("notice-");
   const restorePass = focus && focus.getAttribute && focus.getAttribute("data-act") === "staff-pass";
-  const selStart = restoreSearch || restoreAdd || restoreIg || restoreNotice || restorePass ? focus.selectionStart : null;
-  const selEnd = restoreSearch || restoreAdd || restoreIg || restoreNotice || restorePass ? focus.selectionEnd : null;
-  const restoreAct = restoreSearch || restoreAdd || restoreIg || restoreNotice || restorePass ? focus.getAttribute("data-act") : null;
+  const restoreEmail = focus && focus.getAttribute && focus.getAttribute("data-act") === "staff-email";
+  const restoreStaff = restorePass || restoreEmail;
+  const selStart = restoreSearch || restoreAdd || restoreIg || restoreNotice || restoreStaff ? focus.selectionStart : null;
+  const selEnd = restoreSearch || restoreAdd || restoreIg || restoreNotice || restoreStaff ? focus.selectionEnd : null;
+  const restoreAct = restoreSearch || restoreAdd || restoreIg || restoreNotice || restoreStaff ? focus.getAttribute("data-act") : null;
 
   if (ui.view === "case") {
     renderCase();
@@ -790,9 +797,8 @@ async function submitPassword() {
     render();
     return;
   }
-  const typed = ui.password;
-  if (!typed) {
-    ui.staffError = "Enter the password.";
+  if (!ui.email.trim() || !ui.password) {
+    ui.staffError = "Enter your staff email and password.";
     render();
     return;
   }
@@ -800,31 +806,25 @@ async function submitPassword() {
   ui.staffError = "";
   render();
   try {
-    const hex = await sha256Hex(typed);
-    if (hex === STAFF_PASSWORD_HASH) {
-      sessionStorage.setItem(STAFF_SESSION_KEY, "ok");
-      clearFails();
-      ui.password = "";
-      ui.staffError = "";
-      ui.staffBusy = false;
-      ui.view = "manager";
-      render();
-      return;
-    }
+    await signInStaff(ui.email, ui.password);
+    clearFails();
+    sessionStorage.setItem(STAFF_SESSION_KEY, "ok");
+    ui.password = "";
+    ui.staffError = "";
+    ui.staffBusy = false;
+    ui.view = "manager";
+    render();
+  } catch (err) {
     ui.password = "";
     recordFail();
     ui.staffBusy = false;
     ui.staffError = isLocked()
       ? "Too many tries. Pause for a couple of minutes."
-      : "That didn’t match. Try again.";
+      : staffAuthErrorMessage(err);
     render();
     requestAnimationFrame(() => {
       root.querySelector("[data-act=staff-pass]")?.focus();
     });
-  } catch {
-    ui.staffBusy = false;
-    ui.staffError = "Couldn’t check that right now.";
-    render();
   }
 }
 
@@ -1002,6 +1002,15 @@ root.addEventListener("input", (e) => {
     ui.search = t.value;
     render();
   }
+  if (act === "staff-email") {
+    ui.email = t.value;
+    if (ui.staffError) {
+      ui.staffError = "";
+      const err = root.querySelector(".staff-error");
+      if (err) err.textContent = "";
+      root.querySelector(".staff")?.classList.remove("shake");
+    }
+  }
   if (act === "staff-pass") {
     ui.password = t.value;
     if (ui.staffError) {
@@ -1100,11 +1109,13 @@ setInterval(() => {
   }
 }, 15000);
 
-if (isStaffRoute()) goStaff();
-else {
-  ui.view = "case";
-  render();
-}
+whenAuthReady().then(() => {
+  if (isStaffRoute()) goStaff();
+  else {
+    ui.view = "case";
+    render();
+  }
+});
 
 function setupNativeStatusBar() {
   if (typeof window === "undefined" || !window.Capacitor) return;
