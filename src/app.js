@@ -4,7 +4,12 @@ import {
 import { render, requestStaffReset } from "./app-views.js";
 import { STAFF_SESSION_KEY } from "./data.js";
 import {
-  signInStaff, staffAuthErrorMessage, whenAuthReady, resetStaffPassword, staffResetMessage,
+  signInStaff,
+  signOutStaff,
+  staffAuthErrorMessage,
+  whenAuthReady,
+  resetStaffPassword,
+  staffResetMessage,
 } from "./staff-auth.js";
 import { setupStaffIdleTimeout } from "./staff-idle.js";
 import {
@@ -103,6 +108,27 @@ root.addEventListener("click", (e) => {
   }
   if (act === "staff-forgot") {
     requestStaffReset();
+    return;
+  }
+  if (act === "staff-logout") {
+    void (async () => {
+      try {
+        await signOutStaff();
+      } catch {
+        /* still clear local session */
+      }
+      try {
+        sessionStorage.removeItem(STAFF_SESSION_KEY);
+      } catch {
+        /* private mode */
+      }
+      ui.password = "";
+      ui.sheet = null;
+      ui.selectedPan = null;
+      ui.pickId = null;
+      ui.staffError = "";
+      goCase();
+    })();
     return;
   }
   if (act === "tap-pan") {
