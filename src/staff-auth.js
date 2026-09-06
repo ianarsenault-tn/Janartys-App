@@ -1,5 +1,6 @@
 import {
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -59,6 +60,21 @@ export async function signInStaff(email, password) {
   return cred.user;
 }
 
+export async function resetStaffPassword(email) {
+  const normalized = normalizeStaffEmail(email);
+  if (!normalized) {
+    const err = new Error("missing-email");
+    err.code = "staff/missing-email";
+    throw err;
+  }
+  if (!isAllowlistedEmail(normalized)) {
+    const err = new Error("not-staff");
+    err.code = "staff/not-allowed";
+    throw err;
+  }
+  await sendPasswordResetEmail(auth, normalized);
+}
+
 export async function signOutStaff() {
   await signOut(auth);
 }
@@ -66,6 +82,7 @@ export async function signOutStaff() {
 export function staffAuthErrorMessage(err) {
   const code = err?.code || "";
   if (code === "staff/missing") return "Enter your staff email and password.";
+  if (code === "staff/missing-email") return "Enter your staff email first.";
   if (code === "staff/not-allowed") return "That email isn’t on the staff list.";
   if (code === "auth/invalid-email") return "Check the email address.";
   if (code === "auth/user-disabled") return "That staff account is disabled.";
@@ -82,6 +99,23 @@ export function staffAuthErrorMessage(err) {
   if (code === "auth/operation-not-allowed") {
     return "Email/Password isn’t turned on in Firebase yet.";
   }
-
   return "Couldn’t sign in right now.";
+}
+
+export function staffResetMessage(err) {
+  if (!err) return "Check your email for a reset link.";
+  const code = err?.code || "";
+  if (code === "staff/missing-email") return "Enter your staff email first.";
+  if (code === "staff/not-allowed") return "That email isn’t on the staff list.";
+  if (code === "auth/invalid-email") return "Check the email address.";
+  if (code === "auth/user-not-found") {
+    return "No staff account with that email.";
+  }
+  if (code === "auth/too-many-requests") {
+    return "Too many tries. Pause for a couple of minutes.";
+  }
+  if (code === "auth/network-request-failed") {
+    return "Couldn’t reach Firebase. Check the connection.";
+  }
+  return "Couldn’t send a reset email right now.";
 }
