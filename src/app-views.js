@@ -317,6 +317,9 @@ export function renderManager() {
           </div>
         </form>
       </section>
+      <div class="mgr-logout">
+        <button class="ghost-btn mgr-logout-btn" type="button" data-act="staff-logout">Log out</button>
+      </div>
     </div>
     ${sheet}
     ${toastHtml()}
