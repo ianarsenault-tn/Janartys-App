@@ -1,1 +1,1 @@
-x
+PLACEHOLDER_LOAD_FROM_/workspace/janartys-app/src/app.js
