@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 
 // Dynamic import compiled-ish data + staff-auth helpers via rewriting exports is awkward
 // under plain node without a bundler. Test pure logic extracted here + file invariants.
@@ -20,8 +19,7 @@ test("app.js is a real module (not a stub)", () => {
 });
 
 test("data seed is small and covers SEED_CASE", async () => {
-  const url = pathToFileURL(new URL("../src/data.js", import.meta.url).pathname).href;
-  const mod = await import(url);
+  const mod = await import(new URL("../src/data.js", import.meta.url));
   assert.ok(mod.SEED_CATALOG.length <= 20, `seed too large: ${mod.SEED_CATALOG.length}`);
   assert.equal(mod.SEED_CASE.length, 8);
   const ids = new Set(mod.SEED_CATALOG.map((f) => f.id));
@@ -35,7 +33,7 @@ test("data seed is small and covers SEED_CASE", async () => {
 test("staff allowlist rejects non-staff emails", async () => {
   // firebase.js initializes app — import staff-auth after stubbing is heavy.
   // Mirror allowlist logic from staff-auth for a pure check against data.js.
-  const mod = await import(pathToFileURL(new URL("../src/data.js", import.meta.url).pathname).href);
+  const mod = await import(new URL("../src/data.js", import.meta.url));
   const allow = new Set(mod.STAFF_EMAILS.map((e) => e.trim().toLowerCase()));
   assert.equal(allow.has("ian.arsenault@yahoo.com"), true);
   assert.equal(allow.has("random@example.com"), false);

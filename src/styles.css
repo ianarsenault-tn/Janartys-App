@@ -347,14 +347,60 @@ button.status-cell:active { transform: scale(0.985); }
   background: #a89892;
 }
 
-/* ── Flavor grid ─────────────────────────────────────── */
+/* ── Top-down freezer and flavor grid ────────────────── */
 .case {
   flex: 0 0 auto;
-  padding: 2px 16px 12px;
+  /* The 4px outer margin + 12px inset preserve the cards' 16px alignment. */
+  margin: 2px 4px 12px;
+  padding: 16px 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 9px;
   min-height: 0;
+  position: relative;
+  isolation: isolate;
+  border-radius: 20px;
+  box-shadow: 0 3px 8px rgba(44, 55, 59, 0.14);
+}
+
+/* One reusable steel rim and recessed liner; no per-flavor artwork. */
+.case::before,
+.case::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+.case::before {
+  inset: 0;
+  z-index: -2;
+  border: 1px solid #8a9598;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.6), transparent 5% 95%, rgba(255, 255, 255, 0.55)),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.18) 0 0.5px, rgba(62, 77, 82, 0.08) 0.5px 1px, transparent 1px 3px),
+    linear-gradient(135deg, #9ba5a7, #f1f3f0 8%, #acb5b7 14%, #e4e9e8 30%, #a5afb2 48%, #edf0ee 70%, #8e999d 87%, #d5dcdb);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9),
+    inset 0 3px 2px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 2px rgba(48, 63, 69, 0.3);
+}
+.case::after {
+  inset: 8px;
+  z-index: -1;
+  border: 2px solid #647277;
+  border-radius: 13px;
+  background:
+    radial-gradient(ellipse at 30% 0, rgba(255, 255, 255, 0.95) 0 1px, transparent 2.5px) left top / 7px 5px repeat-x,
+    radial-gradient(ellipse at 70% 100%, rgba(255, 255, 255, 0.9) 0 1px, transparent 2.5px) left bottom / 9px 5px repeat-x,
+    radial-gradient(ellipse at 0 30%, rgba(255, 255, 255, 0.9) 0 1px, transparent 2.5px) left top / 5px 7px repeat-y,
+    radial-gradient(ellipse at 100% 70%, rgba(255, 255, 255, 0.9) 0 1px, transparent 2.5px) right top / 5px 9px repeat-y,
+    linear-gradient(135deg, #d6e0e2, #edf2f2 35%, #e1e8ea 75%, #cfdbdf);
+  box-shadow:
+    0 0 0 1px rgba(247, 251, 250, 0.85),
+    0 0 0 2px rgba(61, 75, 80, 0.22),
+    inset 0 0 0 2px rgba(237, 250, 252, 0.8),
+    inset 0 0 6px 3px rgba(255, 255, 255, 0.8),
+    inset 0 5px 10px rgba(69, 92, 101, 0.3);
 }
 .card {
   background: var(--white);
