@@ -23,8 +23,9 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        animation: splashScreen 2.4s ease forwards;
+        transition: opacity 160ms ease-out;
       }
+      #splash.leaving { opacity: 0; pointer-events: none; }
       .splash-bar {
         position: absolute;
         top: 0; left: 0; right: 0;
@@ -37,15 +38,11 @@
         display: block;
         opacity: 0;
         transform: scale(0.97);
-        animation: splashLogo 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        animation: splashLogo 300ms ease-out forwards;
       }
       @keyframes splashLogo {
         from { opacity: 0; transform: scale(0.97); }
         to { opacity: 1; transform: scale(1); }
-      }
-      @keyframes splashScreen {
-        0%, 76% { opacity: 1; }
-        100% { opacity: 0; visibility: hidden; pointer-events: none; }
       }
       @media (prefers-reduced-motion: reduce) {
         .splash-lockup {
@@ -53,7 +50,7 @@
           opacity: 1;
           transform: none;
         }
-        #splash { animation: splashScreen 0.7s ease 0.35s forwards; }
+        #splash { transition: none; }
       }
     </style>
   </head>
@@ -73,16 +70,24 @@
         if (!splash) return;
         var theme = document.querySelector('meta[name="theme-color"]');
         var done = false;
+        var returning = false;
+        try { returning = sessionStorage.getItem("janartys-opened") === "yes"; } catch (_) {}
         function finish() {
           if (done) return;
           done = true;
           splash.remove();
           if (theme) theme.setAttribute("content", "#FFF8F0");
         }
-        splash.addEventListener("animationend", function (e) {
-          if (e.animationName === "splashScreen") finish();
-        });
-        setTimeout(finish, 2800);
+        function ready() {
+          try { sessionStorage.setItem("janartys-opened", "yes"); } catch (_) {}
+          if (returning || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return finish();
+          splash.classList.add("leaving");
+          setTimeout(finish, 180);
+        }
+        window.addEventListener("janartys-ready", ready, { once: true });
+        if (returning) finish();
+        // Preserve the existing escape hatch if a script or network request fails.
+        setTimeout(finish, 1800);
       })();
     </script>
     <script type="module" src="/src/main.js"></script>

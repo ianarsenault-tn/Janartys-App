@@ -16,6 +16,9 @@ import {
   whenAuthReady,
 } from "./staff-auth.js";
 import { setupStaffIdleTimeout } from "./staff-idle.js";
+import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, swapKey, updateLabel } from "./presentation.js";
+import { setupSheetInteractions } from "./sheet-interactions.js";
+import { tapFeedback } from "./feedback.js";
 import {
   addFlavor,
   availableForSwap,
@@ -48,15 +51,17 @@ const MAX_FAILS = 5;
 const LOCK_MS = 2 * 60 * 1000;
 const LOGO_TAPS_NEEDED = 7;
 const LOGO_TAP_GAP_MS = 2800;
-const JUST_OUT_MS = 30 * 60 * 1000;
+let renderedView = null;
+let renderedSheet = "";
+let sheetOpener = null;
+let caseIntroduced = false;
+let readyAnnounced = false;
+let renderedData = "";
+let seenSwap = "";
+try { seenSwap = sessionStorage.getItem("janartys-seen-swap") || ""; } catch { /* storage is optional */ }
 
 function justOutSwap() {
-  const swap = getState().lastSwap;
-  if (!swap?.inId || swap.at == null) return null;
-  const at = typeof swap.at === "number" ? swap.at : Date.parse(swap.at);
-  if (!Number.isFinite(at)) return null;
-  if (Date.now() - at >= JUST_OUT_MS) return null;
-  return swap;
+  return freshSwap(getState().lastSwap);
 }
 
 function scheduleJustOutClear() {
@@ -186,15 +191,30 @@ function igCardHtml() {
   </a>`;
 }
 
-function relativeTime(ts) {
-  const sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (sec < 20) return "Updated just now";
-  if (sec < 60) return `Updated ${sec}s ago`;
-  const min = Math.round(sec / 60);
-  if (min === 1) return "Updated 1 min ago";
-  if (min < 60) return `Updated ${min} min ago`;
-  const hr = Math.round(min / 60);
-  return hr === 1 ? "Updated 1 hr ago" : `Updated ${hr} hr ago`;
+function sheetControls() {
+  return `<div class="sheet-controls">
+    <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"><span aria-hidden="true"></span></button>
+    <button class="sheet-close" type="button" data-act="close-sheet" aria-label="Close details"><span aria-hidden="true">×</span></button>
+  </div>`;
+}
+
+function refreshCaseInfo() {
+  const updated = root.querySelector("[data-updated]");
+  if (updated) updated.textContent = updateLabel(getState().updatedAt);
+  const connection = root.querySelector("[data-connection]");
+  if (connection) {
+    const label = connectionLabel(getSyncStatus().live, navigator.onLine);
+    connection.dataset.state = label.toLowerCase().replace(" ", "-");
+    connection.querySelector("[data-connection-label]").textContent = label;
+    connection.title = label === "Connected" ? "Receiving updates from the shop" : "Showing the last available flavors; reconnect to check for updates";
+  }
+  const banner = root.querySelector("[data-shop-notice]");
+  if (banner) {
+    const notice = activeNotice(getState().lastNotice);
+    banner.hidden = !notice;
+    const message = notice?.message || "";
+    if (banner.querySelector("p").textContent !== message) banner.querySelector("p").textContent = message;
+  }
 }
 
 function isStaffRoute() {
@@ -343,9 +363,8 @@ function showToast(kind, html, sub = "") {
 }
 
 function onSwapSuccess(swap) {
-  const customerHtml = `<strong>${esc(swap.inName)}</strong> just came out`;
   if (ui.view === "case") {
-    showToast("customer", customerHtml);
+    render();
   } else {
     showToast(
       "manager",
@@ -358,24 +377,25 @@ function onSwapSuccess(swap) {
       ui.selectedPan = null;
       ui.pickId = null;
       history.replaceState(null, "", "#/");
-      showToast("customer", customerHtml);
+      ui.toast = null;
+      render();
     }, 1400);
   }
 }
 
 function onNoticeSuccess(notice) {
-  const customerHtml = `<strong>${esc(notice.message)}</strong>`;
   if (ui.view === "case") {
-    showToast("customer", customerHtml);
+    refreshCaseInfo();
   } else {
-    showToast("manager", `<em>Customers notified</em>`, notice.message);
+    showToast("manager", `<em>Shop notice posted</em>`, notice.message);
     setTimeout(() => {
       ui.view = "case";
       ui.sheet = null;
       ui.selectedPan = null;
       ui.pickId = null;
       history.replaceState(null, "", "#/");
-      showToast("customer", customerHtml);
+      ui.toast = null;
+      render();
     }, 1200);
   }
 }
@@ -402,9 +422,9 @@ function renderStorySheet() {
   const f = flavorById(ui.storyId);
   if (!f) return "";
   return `
-    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
-    <aside class="sheet story-sheet" aria-label="${esc(f.name)}">
-      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+    <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet story-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="${esc(f.name)}">
+      ${sheetControls()}
       <div class="sheet-kicker">On the board</div>
       <div class="story-head">
         <span class="story-scoop" style="background: ${esc(f.scoopColor)}"></span>
@@ -424,9 +444,9 @@ function renderHoursSheet() {
   const waze =
     "https://waze.com/ul?q=111%20Front%20Street%20Smyrna%20TN&navigate=yes";
   return `
-    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
-    <aside class="sheet hours-sheet" aria-label="Hours">
-      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+    <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet hours-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Hours">
+      ${sheetControls()}
       <div class="sheet-kicker">Hours</div>
       <div class="sheet-title">When we’re here</div>
       <p class="story-body">${esc(HOURS_BLURB)}</p>
@@ -453,9 +473,9 @@ function renderMapsSheet() {
   const waze =
     "https://waze.com/ul?q=111%20Front%20Street%20Smyrna%20TN&navigate=yes";
   return `
-    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
-    <aside class="sheet maps-sheet" aria-label="Get directions">
-      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+    <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet maps-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Get directions">
+      ${sheetControls()}
       <div class="sheet-kicker">111 Front Street</div>
       <div class="sheet-title">Get directions</div>
       <div class="maps-list">
@@ -471,7 +491,13 @@ function renderMapsSheet() {
 function renderCase() {
   const state = getState();
   const flavors = caseFlavors();
-  const freshId = justOutSwap()?.inId;
+  const fresh = justOutSwap();
+  const freshId = fresh?.inId;
+  const arrival = !ui.sheet && fresh && swapKey(fresh) !== seenSwap;
+  if (arrival) {
+    seenSwap = swapKey(fresh);
+    try { sessionStorage.setItem("janartys-seen-swap", seenSwap); } catch { /* storage is optional */ }
+  }
   const status = getShopStatus();
   const cards = flavors
     .map((f, i) => {
@@ -480,7 +506,7 @@ function renderCase() {
         ? `<span class="card-chip">Dairy-free</span>`
         : "";
       const badge = fresh ? `<span class="just-out">Just out</span>` : "";
-      return `<button class="card ${fresh ? "fresh pop" : ""}" type="button" data-act="open-story" data-id="${esc(f.id)}" data-slot="${i}" aria-label="${esc(f.name)} — flavor story">
+      return `<button class="card ${fresh ? "fresh" : ""} ${fresh && arrival ? "pop" : ""}" type="button" data-act="open-story" data-id="${esc(f.id)}" data-slot="${i}" aria-label="${esc(f.name)} — flavor story">
         ${badge}
         <div class="card-top">
           <span class="scoop" style="background: ${esc(f.scoopColor)}"></span>
@@ -509,9 +535,12 @@ function renderCase() {
         </div>
         <div class="nav-aside">
           <div class="nav-screen">What’s out</div>
-          <span class="nav-meta" data-updated>${esc(relativeTime(getState().updatedAt).replace(/^Updated /, ""))}</span>
         </div>
       </header>
+      <div class="case-meta">
+        <span data-updated>${esc(updateLabel(state.updatedAt))}</span>
+        <span class="connection" data-connection role="status"><span class="connection-dot" aria-hidden="true"></span><span data-connection-label></span></span>
+      </div>
       <div class="status-row">
         <button class="status-cell ${status.open ? "is-open" : "is-closed"}" type="button" data-act="open-hours" data-status-chip>
           <span class="status-kicker"><span class="dot"></span>${esc(status.headline)}</span>
@@ -522,12 +551,18 @@ function renderCase() {
           <span class="status-detail">Every scoop</span>
         </div>
       </div>
-      <div class="case">${cards}</div>
+      <section class="shop-notice" data-shop-notice aria-label="Shop notice" hidden>
+        <span class="shop-notice-label">From the shop</span><p role="status" aria-live="polite"></p>
+      </section>
+      <div class="case ${!caseIntroduced ? "case-enter" : ""}">${cards}</div>
+      <span class="sr-only" role="status">${arrival ? `${esc(fresh.inName || flavorById(fresh.inId)?.name || "A new flavor")} just came out` : ""}</span>
       ${igCardHtml()}
     </div>
     ${sheet}
     ${toastHtml()}
   `;
+  caseIntroduced = true;
+  refreshCaseInfo();
 }
 
 function renderLogin() {
@@ -609,9 +644,9 @@ function renderSwapSheet() {
   const disabled = ui.pickId ? "" : "disabled";
 
   return `
-    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
-    <aside class="sheet" aria-label="Replace flavor">
-      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+    <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Replace flavor">
+      ${sheetControls()}
       <div class="sheet-kicker">Pan ${slot + 1}</div>
       <div class="sheet-title">Replace ${esc(current.name)}</div>
       <label class="search">
@@ -627,7 +662,7 @@ function renderSwapSheet() {
         <button class="swap-btn" type="button" data-act="do-swap" ${disabled}>
           ${pickName ? `Swap in ${esc(pickName)}` : "Swap pan"}
         </button>
-        <div class="swap-sub">Customers get a notification the moment you tap</div>
+        <div class="swap-sub">The new flavor appears with a Just out badge</div>
       </div>
     </aside>
   `;
@@ -637,9 +672,9 @@ function renderAddSheet() {
   const a = ui.add;
   const preview = scoopFromHex(a.color);
   return `
-    <button class="veil" type="button" data-act="close-sheet" aria-label="Close"></button>
-    <aside class="sheet" aria-label="Add flavor">
-      <button class="grabber" type="button" data-act="close-sheet" aria-label="Close sheet"></button>
+    <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
+    <aside class="sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Add flavor">
+      ${sheetControls()}
       <div class="sheet-kicker">Catalog</div>
       <div class="sheet-title">Add a flavor</div>
       <form class="form" data-act="add-form">
@@ -701,7 +736,7 @@ function renderManager() {
         </div>
         <button class="nav-case" type="button" data-act="go-case">Case</button>
       </header>
-      <p class="hint">Tap a pan to swap it. Customers get a notification.</p>
+      <p class="hint">Tap a pan to swap it. New flavors get a Just out badge.</p>
       ${getSyncStatus().writeError ? `<p class="sync-warn">Couldn’t reach the case server.</p>` : ""}
       <div class="pans">${pans}</div>
       <div class="mgr-actions">
@@ -723,7 +758,7 @@ function renderManager() {
       </section>
       <section class="ig-mgr notice-mgr" aria-label="Tell customers">
         <div class="ig-mgr-kicker">Tell customers</div>
-        <p class="ig-mgr-sub">A short notification on What’s Out — same style as a pan swap.</p>
+        <p class="ig-mgr-sub">Shown above the freezer until midnight, shop time. Posting again replaces the current notice.</p>
         <form class="ig-form" data-act="notice-form">
           <div>
             <label class="field-label" for="notice-msg">Message</label>
@@ -732,7 +767,7 @@ function renderManager() {
               placeholder="Pints 20% off after 7 tonight." />
           </div>
           <div class="ig-mgr-btns">
-            <button class="primary-btn" type="submit" data-act="notice-send" ${ui.notice.trim() ? "" : "disabled"}>Send notification</button>
+            <button class="primary-btn" type="submit" data-act="notice-send" ${ui.notice.trim() ? "" : "disabled"}>Post shop notice</button>
           </div>
         </form>
       </section>
@@ -772,6 +807,12 @@ function renderManager() {
 
 function render() {
   const focus = document.activeElement;
+  const nextSheet = ui.sheet ? `${ui.sheet}:${ui.storyId || ui.selectedPan || ""}` : "";
+  const sameView = renderedView === ui.view;
+  const scrollTop = sameView ? root.querySelector(".screen")?.scrollTop || 0 : 0;
+  const sheetScroll = nextSheet === renderedSheet ? root.querySelector(".sheet")?.scrollTop || 0 : 0;
+  const focusedControl = focus?.closest?.("[data-act]");
+  const focusKey = focusedControl ? { act: focusedControl.dataset.act, id: focusedControl.dataset.id, slot: focusedControl.dataset.slot, label: focusedControl.getAttribute("aria-label") } : null;
   const restoreSearch =
     focus && focus.getAttribute && focus.getAttribute("data-act") === "search";
   const restoreAdd = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("add-");
@@ -800,6 +841,33 @@ function render() {
     }
   }
   root.classList.toggle("has-sheet", Boolean(ui.sheet));
+  const screen = root.querySelector(".screen");
+  if (screen) { screen.scrollTop = scrollTop; screen.inert = Boolean(nextSheet); }
+  const sheet = root.querySelector(".sheet");
+  if (sheet) {
+    sheet.scrollTop = sheetScroll;
+    if (nextSheet === renderedSheet) sheet.classList.add("settled");
+  }
+  const focusControl = (key, container = root) => {
+    if (!key) return false;
+    const match = [...container.querySelectorAll("[data-act]")].find(el => el.dataset.act === key.act && el.dataset.id === key.id && el.dataset.slot === key.slot && (key.label == null || el.getAttribute("aria-label") === key.label));
+    match?.focus({ preventScroll: true });
+    return Boolean(match);
+  };
+  if (sheet && nextSheet !== renderedSheet) {
+    (sheet.querySelector(".sheet-close") || sheet).focus({ preventScroll: true });
+  } else if (!nextSheet && renderedSheet && sameView) {
+    focusControl(sheetOpener);
+  } else if (!restoreAct && sameView) {
+    focusControl(focusKey, sheet || root);
+  }
+  renderedView = ui.view;
+  renderedSheet = nextSheet;
+  renderedData = JSON.stringify(getState());
+  if (!readyAnnounced) {
+    readyAnnounced = true;
+    window.dispatchEvent(new Event("janartys-ready"));
+  }
 }
 
 async function requestStaffReset() {
@@ -881,6 +949,9 @@ root.addEventListener("click", (e) => {
     return;
   }
   const act = t.getAttribute("data-act");
+  if (["open-story", "open-hours", "open-maps", "tap-pan", "open-add"].includes(act)) {
+    sheetOpener = { act, id: t.dataset.id, slot: t.dataset.slot };
+  }
   if (act === "hours-close-at") {
     if (typeof t.showPicker === "function") {
       try {
@@ -942,6 +1013,7 @@ root.addEventListener("click", (e) => {
     return;
   }
   if (act === "open-story") {
+    void tapFeedback();
     ui.storyId = t.getAttribute("data-id");
     ui.sheet = "story";
     render();
@@ -985,6 +1057,7 @@ root.addEventListener("click", (e) => {
     if (ui.selectedPan == null || !ui.pickId) return;
     const ok = swapPan(ui.selectedPan, ui.pickId);
     if (ok) {
+      void tapFeedback();
       const swap = getState().lastSwap;
       ui.sheet = null;
       ui.selectedPan = null;
@@ -1112,7 +1185,8 @@ root.addEventListener("keydown", (e) => {
 });
 
 subscribe(() => {
-  render();
+  if (ui.view === "case" && JSON.stringify(getState()) === renderedData) refreshCaseInfo();
+  else render();
 });
 
 window.addEventListener("janartys-remote-swap", (e) => {
@@ -1120,7 +1194,8 @@ window.addEventListener("janartys-remote-swap", (e) => {
   if (!swap || swap.at === ui.lastSeenSwapAt) return;
   ui.lastSeenSwapAt = swap.at;
   if (ui.view === "case") {
-    showToast("customer", `<strong>${esc(swap.inName)}</strong> just came out`);
+    // The fresh pan and its live announcement already rendered with the store update.
+    refreshCaseInfo();
   } else {
     showToast(
       "manager",
@@ -1135,9 +1210,9 @@ window.addEventListener("janartys-remote-notice", (e) => {
   if (!notice || notice.at === ui.lastSeenNoticeAt) return;
   ui.lastSeenNoticeAt = notice.at;
   if (ui.view === "case") {
-    showToast("customer", `<strong>${esc(notice.message)}</strong>`);
+    refreshCaseInfo();
   } else {
-    showToast("manager", `<em>Customers notified</em>`, notice.message);
+    if (activeNotice(notice)) showToast("manager", `<em>Shop notice posted</em>`, notice.message);
   }
 });
 
@@ -1148,14 +1223,7 @@ window.addEventListener("hashchange", () => {
 
 setInterval(() => {
   if (ui.view === "case") {
-    const updated = root.querySelector("[data-updated]");
-    if (updated) updated.textContent = relativeTime(getState().updatedAt).replace(/^Updated /, "");
-    const live = root.querySelector(".nav-live");
-    if (live) {
-      const on = getSyncStatus().live;
-      live.className = on ? "nav-live" : "nav-live off";
-      live.textContent = on ? "Live" : "Offline";
-    }
+    refreshCaseInfo();
     const chip = root.querySelector("[data-status-chip]");
     if (chip) {
       const status = getShopStatus();
@@ -1183,11 +1251,23 @@ setupStaffIdleTimeout({
   },
 });
 
+setupSheetInteractions(root, dismissSheet);
+window.addEventListener("online", refreshCaseInfo);
+window.addEventListener("offline", refreshCaseInfo);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    refreshCaseInfo();
+    if (ui.view === "case" && root.querySelector(".just-out") && !justOutSwap()) render();
+  }
+});
+if (!isStaffRoute()) render();
+
 whenAuthReady().then(() => {
   if (isStaffRoute()) goStaff();
   else {
     ui.view = "case";
-    render();
+    if (renderedView === "case") refreshCaseInfo();
+    else render();
   }
 });
 

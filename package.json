@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
-    "test": "node --test test/smoke.test.js"
+    "test": "node --test"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.1",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^8.5.1",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "firebase": "^12.18.0"

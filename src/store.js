@@ -219,17 +219,19 @@ function startLiveSync() {
     }
     const unsub = onSnapshot(
       LIVE_REF,
+      { includeMetadataChanges: true },
       (snap) => {
+        const wasLive = syncStatus.live;
+        syncStatus.live = !snap.metadata.fromCache && !snap.metadata.hasPendingWrites;
         if (!snap.exists()) {
-          setDoc(LIVE_REF, livePayload(), { merge: true }).catch(() => {
+          if (!snap.metadata.fromCache) setDoc(LIVE_REF, livePayload(), { merge: true }).catch(() => {
             /* offline or rules not published yet */
           });
+          if (wasLive !== syncStatus.live) emit();
           return;
         }
-        const wasLive = syncStatus.live;
-        syncStatus.live = true;
         applyRemote(snap.data());
-        if (!wasLive) emit();
+        if (wasLive !== syncStatus.live) emit();
       },
       () => {
         if (syncStatus.live) {
@@ -245,6 +247,10 @@ function startLiveSync() {
 }
 
 startLiveSync();
+window.addEventListener("offline", () => {
+  syncStatus.live = false;
+  emit();
+});
 
 export function getState() {
   return state;
