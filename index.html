@@ -59,7 +59,10 @@
       <div class="splash-bar" aria-hidden="true"></div>
       <img
         class="splash-lockup"
-        src="https://images.squarespace-cdn.com/content/v1/6373c84849d6135c07860be8/f22d8770-c4f6-498a-a1a2-0d1646d06550/Janartys.png?format=750w"
+        src="/src/assets/janartys-logo.png"
+        fetchpriority="high"
+        width="750"
+        height="483"
         alt="Janarty’s Homemade Ice Cream"
       />
     </div>
@@ -69,23 +72,43 @@
         var splash = document.getElementById("splash");
         if (!splash) return;
         var theme = document.querySelector('meta[name="theme-color"]');
+        var app = document.getElementById("app");
+        var logo = splash.querySelector("img");
+        var minimumDisplayMs = 1000;
+        var visibleAt = logo.complete ? performance.now() : null;
+        var appReady = false;
+        var scheduled = false;
         var done = false;
-        var returning = false;
-        try { returning = sessionStorage.getItem("janartys-opened") === "yes"; } catch (_) {}
+        app.inert = true;
         function finish() {
           if (done) return;
           done = true;
           splash.remove();
+          app.inert = false;
           if (theme) theme.setAttribute("content", "#FFF8F0");
         }
-        function ready() {
-          try { sessionStorage.setItem("janartys-opened", "yes"); } catch (_) {}
-          if (returning || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return finish();
+        function reveal() {
+          if (done) return;
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return finish();
           splash.classList.add("leaving");
           setTimeout(finish, 180);
         }
-        window.addEventListener("janartys-ready", ready, { once: true });
-        if (returning) finish();
+        function revealWhenReady() {
+          if (done || scheduled || !appReady || visibleAt == null) return;
+          scheduled = true;
+          setTimeout(reveal, Math.max(0, minimumDisplayMs - (performance.now() - visibleAt)));
+        }
+        function logoReady() {
+          if (visibleAt != null) return;
+          visibleAt = performance.now();
+          revealWhenReady();
+        }
+        logo.addEventListener("load", logoReady, { once: true });
+        logo.addEventListener("error", logoReady, { once: true });
+        window.addEventListener("janartys-ready", function () {
+          appReady = true;
+          revealWhenReady();
+        }, { once: true });
         // Preserve the existing escape hatch if a script or network request fails.
         setTimeout(finish, 1800);
       })();
