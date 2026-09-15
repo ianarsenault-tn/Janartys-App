@@ -7,3 +7,11 @@ ios/DerivedData
 DerivedData
 *.xcuserstate
 xcuserdata/
+.wrangler/
+.dev.vars*
+.env*
+!*.example
+GoogleService-Info.plist
+*.p8
+*service-account*.json
+push-relay/worker-configuration.d.ts

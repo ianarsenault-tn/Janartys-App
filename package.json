@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
-    "test": "node --test"
+    "test": "node --test test/smoke.test.js test/presentation.test.js test/customer.test.js",
+    "test:relay": "npm --prefix push-relay test",
+    "ios:enable-push": "node scripts/enable-ios-push.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.1",
@@ -16,6 +18,7 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^8.5.1",
     "@capacitor/core": "^8.5.1",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.2",

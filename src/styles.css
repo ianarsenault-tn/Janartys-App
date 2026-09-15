@@ -447,6 +447,7 @@ button.status-cell:active { transform: scale(0.985); }
 }
 .card-name {
   min-width: 0;
+  flex: 1;
   overflow-wrap: anywhere;
   font-family: var(--heading);
   font-weight: 700;
@@ -481,6 +482,9 @@ button.status-cell:active { transform: scale(0.985); }
   display: inline-flex;
   align-items: center;
 }
+.card-top.wide-name { flex-wrap: wrap; }
+.card-name > span { white-space: nowrap; }
+.card-top.wide-name .card-name { flex-basis: 100%; }
 @media (max-width: 360px) {
   .case .card { padding-left: 9px; padding-right: 9px; }
   .case .card-top { gap: 6px; }

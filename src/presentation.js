@@ -36,7 +36,7 @@ export function activeNotice(notice, now = Date.now()) {
 
 export function freshSwap(swap, now = Date.now()) {
   const at = timestamp(swap?.at);
-  return swap?.inId && Number.isFinite(at) && at <= now && now - at < JUST_OUT_MS ? swap : null;
+  return swap?.inId && swap.kind !== "undo" && Number.isFinite(at) && at <= now && now - at < JUST_OUT_MS ? swap : null;
 }
 
 export function swapKey(swap) {

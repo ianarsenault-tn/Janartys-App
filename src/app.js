@@ -19,6 +19,11 @@ import { setupStaffIdleTimeout } from "./staff-idle.js";
 import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, swapKey, updateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
 import { tapFeedback } from "./feedback.js";
+import { fitFlavorNames, setupFlavorNameFitting } from "./flavor-name-fit.js";
+import { getCustomer, subscribeCustomer, toggleFavorite, setAlertPreference, customerStorageAvailable } from "./customer-store.js";
+import { customerNav, libraryHtml, alertsHtml, favoriteButton, availabilityChips } from "./customer-ui.js";
+import { availabilityFor, canUndoSwap } from "./case-actions.js";
+import { enableNotifications, disableNotifications, initializeNotifications, notificationStatus, subscribeNotifications, publishShopEvent } from "./notifications.js";
 import {
   addFlavor,
   availableForSwap,
@@ -40,9 +45,12 @@ import {
   setInstagram,
   subscribe,
   swapPan,
+  undoLastSwap,
+  setFlavorAvailability,
 } from "./store.js";
 
 const root = document.querySelector("#app");
+setupFlavorNameFitting(root);
 
 
 const STAFF_FAIL_KEY = "janartys-staff-fails";
@@ -57,6 +65,7 @@ let sheetOpener = null;
 let caseIntroduced = false;
 let readyAnnounced = false;
 let renderedData = "";
+let renderedDay = "";
 let seenSwap = "";
 try { seenSwap = sessionStorage.getItem("janartys-seen-swap") || ""; } catch { /* storage is optional */ }
 
@@ -96,7 +105,14 @@ const ui = {
   lastSeenNoticeAt: 0,
   logoTaps: 0,
   logoTapAt: 0,
+  librarySearch: "",
+  inCaseOnly: false,
+  dairyFreeOnly: false,
+  selectedPanId: null,
+  operationBusy: false,
+  operationMessage: "",
 };
+const isCustomerView = () => ["case", "library", "favorites", "alerts"].includes(ui.view);
 
 function coneSvg(cls = "nav-mark") {
   return `<span class="${cls}" aria-hidden="true"></span>`;
@@ -142,10 +158,9 @@ function applyClosingAt(hhmm) {
     mode: "close-at",
   });
   if (same) return;
-  const notice = sendNotice(`Closing at ${formatClock(close)} tonight.`);
-  if (!notice) return;
-  ui.lastSeenNoticeAt = notice.at;
-  onNoticeSuccess(notice);
+  ui.notice = `Closing at ${formatClock(close)} tonight.`;
+  ui.sheet = "notice-preview";
+  render();
 }
 
 function safeHref(url) {
@@ -277,6 +292,7 @@ function dismissSheet() {
   const sheet = root.querySelector(".sheet");
   const veil = root.querySelector(".veil");
   const finish = () => {
+    if (location.hash.startsWith("#/flavor/")) history.replaceState(null, "", "#/");
     ui.sheet = null;
     ui.selectedPan = null;
     ui.pickId = null;
@@ -317,6 +333,24 @@ function goCase() {
   ui.staffError = "";
   history.replaceState(null, "", "#/");
   render();
+}
+
+function goCustomer(view) {
+  ui.view = ["case", "library", "favorites", "alerts"].includes(view) ? view : "case";
+  ui.sheet = null; ui.storyId = null; ui.selectedPan = null;
+  ui.librarySearch = ""; ui.inCaseOnly = false; ui.dairyFreeOnly = false;
+  history.replaceState(null, "", ui.view === "case" ? "#/" : `#/${ui.view}`);
+  render();
+}
+
+function routeCustomer() {
+  const route = location.hash.replace(/^#\/?/, "");
+  if (route.startsWith("flavor/")) {
+    ui.view = "case";
+    try { ui.storyId = decodeURIComponent(route.slice(7)); } catch { ui.storyId = null; }
+    ui.sheet = ui.storyId && flavorById(ui.storyId) ? "story" : null;
+    render();
+  } else goCustomer(route);
 }
 
 function goStaff() {
@@ -368,18 +402,9 @@ function onSwapSuccess(swap) {
   } else {
     showToast(
       "manager",
-      `<em>Customers notified</em>`,
+      `<em>Case updated</em>`,
       `${swap.outName} out, ${swap.inName} in`
     );
-    setTimeout(() => {
-      ui.view = "case";
-      ui.sheet = null;
-      ui.selectedPan = null;
-      ui.pickId = null;
-      history.replaceState(null, "", "#/");
-      ui.toast = null;
-      render();
-    }, 1400);
   }
 }
 
@@ -388,15 +413,6 @@ function onNoticeSuccess(notice) {
     refreshCaseInfo();
   } else {
     showToast("manager", `<em>Shop notice posted</em>`, notice.message);
-    setTimeout(() => {
-      ui.view = "case";
-      ui.sheet = null;
-      ui.selectedPan = null;
-      ui.pickId = null;
-      history.replaceState(null, "", "#/");
-      ui.toast = null;
-      render();
-    }, 1200);
   }
 }
 
@@ -425,13 +441,15 @@ function renderStorySheet() {
     <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
     <aside class="sheet story-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="${esc(f.name)}">
       ${sheetControls()}
-      <div class="sheet-kicker">On the board</div>
+      <div class="sheet-kicker">${getState().caseIds.includes(f.id) ? "In the freezer" : "From the flavor library"}</div>
       <div class="story-head">
         <span class="story-scoop" style="background: ${esc(f.scoopColor)}"></span>
         <div class="sheet-title">${esc(f.name)}</div>
       </div>
       <p class="story-body">${esc(f.story || f.note)}</p>
       <div class="story-tags">${flavorTagsHtml(f)}</div>
+      <div class="stock-badges">${availabilityChips(getState(), f.id)}</div>
+      <div class="story-actions">${favoriteButton(f, getCustomer().favorites, true)}<button type="button" class="text-button" data-act="flavor-alerts" data-id="${esc(f.id)}">Notify me</button></div>
     </aside>
   `;
 }
@@ -514,6 +532,7 @@ function renderCase() {
         </div>
         <p class="card-note">${esc(f.note)}</p>
         ${chip}
+        <span class="stock-badges">${availabilityChips(state, f.id)}</span>
       </button>`;
     })
     .join("");
@@ -558,11 +577,20 @@ function renderCase() {
       <span class="sr-only" role="status">${arrival ? `${esc(fresh.inName || flavorById(fresh.inId)?.name || "A new flavor")} just came out` : ""}</span>
       ${igCardHtml()}
     </div>
+    ${customerNav("case")}
     ${sheet}
     ${toastHtml()}
   `;
   caseIntroduced = true;
   refreshCaseInfo();
+}
+
+function renderCustomerCollection() {
+  root.innerHTML = `<div class="screen">${ui.view === "alerts" ? alertsHtml(getCustomer(), notificationStatus()) : libraryHtml(getState(), getCustomer(), ui)}${!customerStorageAvailable() ? '<p class="staff-message">Device storage is unavailable. Favorites will last until you close this app.</p>' : ""}</div>${customerNav(ui.view)}${ui.sheet === "story" ? renderStorySheet() : ""}`;
+}
+
+function renderNoticePreview() {
+  return `<button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet"></button><aside class="sheet notice-preview-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Preview shop notice">${sheetControls()}<div class="sheet-kicker">Preview</div><h2 class="sheet-title">From the shop</h2><p class="device-note">This banner appears above the freezer until midnight, shop time. People who choose shop announcements can also receive a push alert.</p><section class="shop-notice"><span class="shop-notice-label">From the shop</span><p>${esc(ui.notice.trim().slice(0, 100))}</p></section><button type="button" class="primary-btn" data-act="confirm-notice" ${ui.operationBusy ? "disabled" : ""}>${ui.operationBusy ? "Posting…" : "Post shop notice"}</button><button type="button" class="text-button" data-act="close-sheet">Keep editing</button>${ui.operationMessage ? `<p class="staff-message">${esc(ui.operationMessage)}</p>` : ""}</aside>`;
 }
 
 function renderLogin() {
@@ -641,14 +669,17 @@ function renderSwapSheet() {
     .join("");
 
   const pickName = ui.pickId ? flavorById(ui.pickId)?.name : "";
-  const disabled = ui.pickId ? "" : "disabled";
+  const disabled = ui.pickId && !ui.operationBusy ? "" : "disabled";
+  const stock = availabilityFor(getState(), current.id);
 
   return `
     <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
-    <aside class="sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Replace flavor">
+    <aside class="sheet swap-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="Replace flavor">
       ${sheetControls()}
       <div class="sheet-kicker">Pan ${slot + 1}</div>
       <div class="sheet-title">Replace ${esc(current.name)}</div>
+      <fieldset class="stock-controls" ${ui.operationBusy ? "disabled" : ""}><legend>Today’s availability</legend><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="pintsAvailable" ${stock.pintsAvailable ? "checked" : ""}/>Pints available</label><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="runningLow" ${stock.runningLow ? "checked" : ""}/>Running low</label><p>Labels reset at midnight. Running low also clears when this pan is replaced.</p></fieldset>
+      ${ui.operationMessage ? `<p class="staff-message">${esc(ui.operationMessage)}</p>` : ""}
       <label class="search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="7" cy="7" r="4.4" stroke="#8A7C76" stroke-width="1.6"/>
@@ -660,7 +691,7 @@ function renderSwapSheet() {
       <div class="catalog">${rows || `<p class="empty-cat">No flavors match. Add one below.</p>`}</div>
       <div class="sheet-footer">
         <button class="swap-btn" type="button" data-act="do-swap" ${disabled}>
-          ${pickName ? `Swap in ${esc(pickName)}` : "Swap pan"}
+          ${ui.operationBusy ? "Saving…" : pickName ? `Swap in ${esc(pickName)}` : "Swap pan"}
         </button>
         <div class="swap-sub">The new flavor appears with a Just out badge</div>
       </div>
@@ -718,6 +749,7 @@ function renderManager() {
         <div class="pan-num">Pan ${i + 1}</div>
         <span class="pan-scoop" style="background: ${esc(f.scoopColor)}"></span>
         <div class="pan-name">${esc(f.name)}</div>
+        <div class="pan-stock">${availabilityFor(getState(), f.id).pintsAvailable ? "Pints" : ""}${availabilityFor(getState(), f.id).runningLow ? " · Low" : ""}</div>
       </button>`;
     })
     .join("");
@@ -725,6 +757,7 @@ function renderManager() {
   let sheet = "";
   if (ui.sheet === "swap") sheet = renderSwapSheet();
   if (ui.sheet === "add") sheet = renderAddSheet();
+  if (ui.sheet === "notice-preview") sheet = renderNoticePreview();
 
   root.innerHTML = `
     <div class="screen">
@@ -742,6 +775,8 @@ function renderManager() {
       <div class="mgr-actions">
         <button class="ghost-btn" type="button" data-act="open-add">Add flavor</button>
       </div>
+      ${canUndoSwap(getState()) ? `<div class="undo-panel"><span><strong>Last swap</strong><br/>${esc(getState().lastSwap.outName)} → ${esc(getState().lastSwap.inName)}<br/><small>Undo is available for five minutes.</small></span><button type="button" class="text-button" data-act="undo-swap" data-id="${esc(getState().lastSwap.id)}" ${ui.operationBusy ? "disabled" : ""}>Undo swap</button></div>` : ""}
+      ${ui.operationMessage ? `<p class="staff-message" role="status">${esc(ui.operationMessage)}</p>` : ""}
       <section class="ig-mgr hours-mgr" aria-label="Today’s hours">
         <div class="ig-mgr-kicker">Today’s hours</div>
         <p class="hours-live">${esc(getShopStatus().label)}</p>
@@ -767,7 +802,7 @@ function renderManager() {
               placeholder="Pints 20% off after 7 tonight." />
           </div>
           <div class="ig-mgr-btns">
-            <button class="primary-btn" type="submit" data-act="notice-send" ${ui.notice.trim() ? "" : "disabled"}>Post shop notice</button>
+            <button class="primary-btn" type="submit" data-act="notice-send" ${ui.notice.trim() && !ui.operationBusy ? "" : "disabled"}>Preview notice</button>
           </div>
         </form>
       </section>
@@ -806,6 +841,7 @@ function renderManager() {
 }
 
 function render() {
+  if (ui.sheet === "story" && !flavorById(ui.storyId)) ui.sheet = null;
   const focus = document.activeElement;
   const nextSheet = ui.sheet ? `${ui.sheet}:${ui.storyId || ui.selectedPan || ""}` : "";
   const sameView = renderedView === ui.view;
@@ -814,7 +850,7 @@ function render() {
   const focusedControl = focus?.closest?.("[data-act]");
   const focusKey = focusedControl ? { act: focusedControl.dataset.act, id: focusedControl.dataset.id, slot: focusedControl.dataset.slot, label: focusedControl.getAttribute("aria-label") } : null;
   const restoreSearch =
-    focus && focus.getAttribute && focus.getAttribute("data-act") === "search";
+    focus && focus.getAttribute && ["search", "library-search"].includes(focus.getAttribute("data-act"));
   const restoreAdd = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("add-");
   const restoreIg = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("ig-");
   const restoreNotice = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("notice-");
@@ -828,8 +864,11 @@ function render() {
   if (ui.view === "case") {
     renderCase();
     scheduleJustOutClear();
-  } else if (ui.view === "login") renderLogin();
+  } else if (isCustomerView()) renderCustomerCollection();
+  else if (ui.view === "login") renderLogin();
   else renderManager();
+
+  fitFlavorNames(root);
 
   if (restoreAct) {
     const el = root.querySelector(`[data-act="${restoreAct}"]`);
@@ -843,6 +882,8 @@ function render() {
   root.classList.toggle("has-sheet", Boolean(ui.sheet));
   const screen = root.querySelector(".screen");
   if (screen) { screen.scrollTop = scrollTop; screen.inert = Boolean(nextSheet); }
+  const customerNavigation = root.querySelector(".customer-nav");
+  if (customerNavigation) customerNavigation.inert = Boolean(nextSheet);
   const sheet = root.querySelector(".sheet");
   if (sheet) {
     sheet.scrollTop = sheetScroll;
@@ -850,7 +891,7 @@ function render() {
   }
   const focusControl = (key, container = root) => {
     if (!key) return false;
-    const match = [...container.querySelectorAll("[data-act]")].find(el => el.dataset.act === key.act && el.dataset.id === key.id && el.dataset.slot === key.slot && (key.label == null || el.getAttribute("aria-label") === key.label));
+    const match = [...container.querySelectorAll("[data-act]")].find(el => el.dataset.act === key.act && el.dataset.id === key.id && el.dataset.slot === key.slot && (key.act !== "close-sheet" || key.label == null || el.getAttribute("aria-label") === key.label));
     match?.focus({ preventScroll: true });
     return Boolean(match);
   };
@@ -859,11 +900,14 @@ function render() {
   } else if (!nextSheet && renderedSheet && sameView) {
     focusControl(sheetOpener);
   } else if (!restoreAct && sameView) {
-    focusControl(focusKey, sheet || root);
+    if (!focusControl(focusKey, sheet || root) && focusKey?.act === "favorite") {
+      (root.querySelector('.favorite-button') || root.querySelector('[data-act="customer-tab"][data-id="library"]'))?.focus({ preventScroll: true });
+    }
   }
   renderedView = ui.view;
   renderedSheet = nextSheet;
   renderedData = JSON.stringify(getState());
+  renderedDay = chicagoDate();
   if (!readyAnnounced) {
     readyAnnounced = true;
     window.dispatchEvent(new Event("janartys-ready"));
@@ -932,7 +976,15 @@ async function submitPassword() {
   }
 }
 
-root.addEventListener("click", (e) => {
+async function staffOperation(action) {
+  if (ui.operationBusy || !isStaffSignedIn()) return;
+  ui.operationBusy = true; ui.operationMessage = ""; render();
+  try { await action(); }
+  catch (error) { ui.operationMessage = error.code ? "Couldn’t save this change. Reconnect and try again." : error.message || "Couldn’t save this change."; }
+  finally { ui.operationBusy = false; render(); }
+}
+
+root.addEventListener("click", async (e) => {
   const t = e.target.closest("[data-act]");
   if (!t) {
     const closeWrap = e.target.closest(".hours-close");
@@ -949,6 +1001,33 @@ root.addEventListener("click", (e) => {
     return;
   }
   const act = t.getAttribute("data-act");
+  if (act === "customer-tab") { goCustomer(t.dataset.id); return; }
+  if (act === "favorite") { toggleFavorite(t.dataset.id); void tapFeedback(); return; }
+  if (act === "filter-case") { ui.inCaseOnly = !ui.inCaseOnly; render(); return; }
+  if (act === "filter-dairy") { ui.dairyFreeOnly = !ui.dairyFreeOnly; render(); return; }
+  if (act === "clear-filters") { ui.librarySearch = ""; ui.inCaseOnly = false; ui.dairyFreeOnly = false; render(); return; }
+  if (act === "flavor-alerts") {
+    if (!getCustomer().favorites.includes(t.dataset.id)) toggleFavorite(t.dataset.id);
+    setAlertPreference("favorites", true); goCustomer("alerts"); return;
+  }
+  if (act === "enable-alerts") { await enableNotifications(); return; }
+  if (act === "disable-alerts") { await disableNotifications(); return; }
+  if (act === "undo-swap") {
+    const id = t.dataset.id;
+    await staffOperation(async () => { const swap = await undoLastSwap(id); ui.operationMessage = `Restored ${swap.inName}. Already delivered alerts cannot be recalled.`; void tapFeedback(); });
+    return;
+  }
+  if (act === "confirm-notice") {
+    const message = ui.notice;
+    await staffOperation(async () => {
+      const notice = await sendNotice(message);
+      if (!notice) return;
+      ui.notice = ""; ui.sheet = null; ui.lastSeenNoticeAt = notice.at;
+      onNoticeSuccess(notice);
+      ui.operationMessage = await publishShopEvent({ kind: "announcement", id: notice.id, at: notice.at, message: notice.message });
+    });
+    return;
+  }
   if (["open-story", "open-hours", "open-maps", "tap-pan", "open-add"].includes(act)) {
     sheetOpener = { act, id: t.dataset.id, slot: t.dataset.slot };
   }
@@ -1002,6 +1081,8 @@ root.addEventListener("click", (e) => {
   if (act === "tap-pan") {
     const slot = Number(t.getAttribute("data-slot"));
     ui.selectedPan = slot;
+    ui.selectedPanId = getState().caseIds[slot];
+    ui.operationMessage = "";
     ui.pickId = null;
     ui.search = "";
     ui.sheet = "swap";
@@ -1055,16 +1136,17 @@ root.addEventListener("click", (e) => {
   }
   if (act === "do-swap") {
     if (ui.selectedPan == null || !ui.pickId) return;
-    const ok = swapPan(ui.selectedPan, ui.pickId);
-    if (ok) {
+    const slot = ui.selectedPan, incoming = ui.pickId, outgoing = ui.selectedPanId;
+    await staffOperation(async () => {
+      const swap = await swapPan(slot, incoming, outgoing);
       void tapFeedback();
-      const swap = getState().lastSwap;
       ui.sheet = null;
       ui.selectedPan = null;
       ui.pickId = null;
       ui.lastSeenSwapAt = swap.at;
       onSwapSuccess(swap);
-    }
+      ui.operationMessage = await publishShopEvent({ kind: "flavor", id: swap.id, at: swap.at, flavorId: swap.inId, name: swap.inName });
+    });
     return;
   }
   if (act === "open-add") {
@@ -1115,11 +1197,9 @@ root.addEventListener("submit", (e) => {
   }
   if (act === "notice-form") {
     e.preventDefault();
-    const notice = sendNotice(ui.notice);
-    if (!notice) return;
-    ui.notice = "";
-    ui.lastSeenNoticeAt = notice.at;
-    onNoticeSuccess(notice);
+    if (!ui.notice.trim() || ui.operationBusy) return;
+    sheetOpener = { act: "notice-send" };
+    ui.operationMessage = ""; ui.sheet = "notice-preview"; render();
   }
 });
 
@@ -1127,6 +1207,11 @@ root.addEventListener("change", (e) => {
   const t = e.target;
   const act = t.getAttribute && t.getAttribute("data-act");
   if (act === "hours-close-at") applyClosingAt(t.value);
+  if (act === "alert-preference") setAlertPreference(t.dataset.id, t.checked);
+  if (act === "stock-toggle") {
+    const id = t.dataset.id, key = t.dataset.key, checked = t.checked;
+    void staffOperation(() => setFlavorAvailability(id, key, checked));
+  }
 });
 
 root.addEventListener("input", (e) => {
@@ -1136,6 +1221,7 @@ root.addEventListener("input", (e) => {
     ui.search = t.value;
     render();
   }
+  if (act === "library-search") { ui.librarySearch = t.value; render(); }
   if (act === "staff-email") {
     ui.email = t.value;
     if (ui.staffError) {
@@ -1185,15 +1271,18 @@ root.addEventListener("keydown", (e) => {
 });
 
 subscribe(() => {
+  if (location.hash.startsWith("#/flavor/") && ui.storyId && flavorById(ui.storyId)) ui.sheet = "story";
   if (ui.view === "case" && JSON.stringify(getState()) === renderedData) refreshCaseInfo();
   else render();
 });
+subscribeCustomer(() => { if (isCustomerView()) render(); });
+subscribeNotifications(() => { if (ui.view === "alerts") render(); });
 
 window.addEventListener("janartys-remote-swap", (e) => {
   const swap = e.detail;
   if (!swap || swap.at === ui.lastSeenSwapAt) return;
   ui.lastSeenSwapAt = swap.at;
-  if (ui.view === "case") {
+  if (isCustomerView()) {
     // The fresh pan and its live announcement already rendered with the store update.
     refreshCaseInfo();
   } else {
@@ -1209,7 +1298,7 @@ window.addEventListener("janartys-remote-notice", (e) => {
   const notice = e.detail;
   if (!notice || notice.at === ui.lastSeenNoticeAt) return;
   ui.lastSeenNoticeAt = notice.at;
-  if (ui.view === "case") {
+  if (isCustomerView()) {
     refreshCaseInfo();
   } else {
     if (activeNotice(notice)) showToast("manager", `<em>Shop notice posted</em>`, notice.message);
@@ -1218,10 +1307,11 @@ window.addEventListener("janartys-remote-notice", (e) => {
 
 window.addEventListener("hashchange", () => {
   if (isStaffRoute()) goStaff();
-  else goCase();
+  else routeCustomer();
 });
 
 setInterval(() => {
+  if (renderedDay !== chicagoDate()) render();
   if (ui.view === "case") {
     refreshCaseInfo();
     const chip = root.querySelector("[data-status-chip]");
@@ -1236,6 +1326,7 @@ setInterval(() => {
     const showing = root.querySelector(".just-out");
     if (showing && !justOutSwap()) render();
   }
+  if (ui.view === "manager" && root.querySelector(".undo-panel") && !canUndoSwap(getState())) render();
 }, 15000);
 
 
@@ -1256,18 +1347,23 @@ window.addEventListener("online", refreshCaseInfo);
 window.addEventListener("offline", refreshCaseInfo);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
+    if (renderedDay !== chicagoDate()) render();
     refreshCaseInfo();
     if (ui.view === "case" && root.querySelector(".just-out") && !justOutSwap()) render();
   }
 });
-if (!isStaffRoute()) render();
+window.addEventListener("janartys-open-notification", event => {
+  if (event.detail.flavorId) { location.hash = `#/flavor/${encodeURIComponent(event.detail.flavorId)}`; routeCustomer(); }
+  else goCustomer("case");
+});
+if (!isStaffRoute()) routeCustomer();
+void initializeNotifications();
 
 whenAuthReady().then(() => {
   if (isStaffRoute()) goStaff();
   else {
-    ui.view = "case";
-    if (renderedView === "case") refreshCaseInfo();
-    else render();
+    if (isCustomerView()) refreshCaseInfo();
+    else routeCustomer();
   }
 });
 

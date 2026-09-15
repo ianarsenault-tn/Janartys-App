@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "janartys-push-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "5fde835414d3b41d0f3e1ccc075e2b1f",
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "vars": { "FIREBASE_PROJECT_ID": "janarty-s", "PUSH_ENABLED": "false" },
+  "d1_databases": [{ "binding": "DB", "database_name": "janartys-push-events", "database_id": "e6eca663-a76f-4571-b275-a164561e0bfe", "migrations_dir": "migrations" }]
+}

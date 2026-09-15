@@ -28,8 +28,12 @@ npm run build
 1. Customer Whats Out is the default. Eight cards, dairy-free chips, just-out on the last swap.
 2. Staff access is hidden and is not documented in this README.
 3. After unlock: tap a pan. Pick a replacement from the catalog (flavors already in the case are hidden). Tap Swap pan.
-4. A staff toast fires, then the app jumps back to Whats Out with "{flavor} just came out" and the new card on the board.
+4. Staff stay in Manager after saving, with Undo swap available for five minutes. The customer freezer marks the incoming flavor Just out. Undo does not create another arrival alert.
 5. Add flavor (staff): name, note, dairy-free, scoop color. It lands in the catalog so you can swap it in.
+6. Customers use Flavors and Favorites to search the catalog, filter by freezer/dairy-free status, and save favorites on this device. Alerts offers separate favorite, new-flavor, and shop-announcement choices.
+7. Staff can mark today's pints availability/running-low status from a pan, and preview a shop notice before posting.
+
+Background iOS push is prepared but disabled until Apple/APNs and sender credentials are configured. See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) for activation, delivery limits, and the no-paid-Firebase-services design.
 
 On desktop the app is a 393px phone column, centered on cream.
 
@@ -37,7 +41,7 @@ Open two browsers (or a phone and a laptop) to the live app: a swap, notice, hou
 
 ## iOS (Xcode)
 
-Run the same What’s Out app on a simulator or iPhone. You need a Mac, Xcode, and an Apple Developer account ($99/year) to run on a physical iPhone.
+Run the same What’s Out app on a simulator or iPhone using a Mac and Xcode. Native push distribution requires the appropriate Apple Developer signing and APNs configuration.
 
 ```
 npm i
@@ -62,9 +66,9 @@ App icon: if Xcode still shows the default Capacitor icon, drop `public/heart-ic
 
 ## Data
 
-Live source of truth is Firestore document `shop/live` (Firebase project janarty-s): catalog, eight pan ids, last swap, last notice, hours override, Instagram card. Phones stay in sync.
+Live source of truth is Firestore document `shop/live` (Firebase project janarty-s): catalog, eight pan ids, last swap, last notice, hours override, Instagram card, and optional availability labels. Phones stay in sync.
 
-localStorage key janartys-case-v1 is a cache and offline fallback. If Firestore is unreachable the app still works on that cache. If `shop/live` does not exist yet, the first load or Manager write seeds it from the opening catalog.
+localStorage key janartys-case-v1 is a cache and offline fallback. Customers can browse it when offline. Staff swaps, undo, notices, and availability saves require a successful server response. Customer launches never create or backfill Firestore documents; provision `shop/live` before using Manager. Favorites/preferences use a separate local-only `janartys-customer-v1` key.
 
 Publish the rules in FIRESTORE.md (Firebase Console → Firestore → Rules → Publish) or production mode blocks writes.
 
@@ -87,7 +91,7 @@ Vite plus vanilla JS, Firebase Firestore for the live case, wrapped with Capacit
 npm test
 ```
 
-Smoke checks: real `app.js` (not a stub), small seed covers the default case, staff allowlist, live document shape, and catalog merge no longer re-inflates the full seed into Firestore.
+Tests cover app/data smoke checks, presentation, favorite consent/filtering/topics, swap concurrency guards, undo, and daily availability expiry. Run `npm ci --prefix push-relay` and `npm run test:relay` for authorization, deduplication, and send-cap tests.
 
 ## Instagram
 

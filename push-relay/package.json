@@ -1,0 +1,8 @@
+{
+  "name": "janartys-push-relay",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "wrangler dev", "check": "wrangler types && tsc --noEmit", "test": "node --test test/*.test.js", "deploy": "wrangler deploy" },
+  "dependencies": { "jose": "^6.1.0" },
+  "devDependencies": { "@cloudflare/workers-types": "latest", "typescript": "^5.9.0", "wrangler": "^4.132.0" }
+}

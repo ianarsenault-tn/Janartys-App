@@ -7,3 +7,4 @@ import "./nav-brand.css";
 import "./just-out.css";
 import "./staff-auth.css";
 import "./polish.css";
+import "./customer.css";

@@ -2,6 +2,22 @@
 	"appId": "com.janartys.app",
 	"appName": "Janarty's",
 	"webDir": "dist",
+	"includePlugins": [
+		"@capacitor/haptics",
+		"@capacitor/splash-screen",
+		"@capacitor/status-bar"
+	],
+	"experimental": {
+		"ios": {
+			"spm": {
+				"packageOptions": {
+					"@capacitor-firebase/messaging": {
+						"symlink": true
+					}
+				}
+			}
+		}
+	},
 	"backgroundColor": "#000000",
 	"server": {
 		"androidScheme": "https"
@@ -11,6 +27,12 @@
 		"preferredContentMode": "mobile"
 	},
 	"plugins": {
+		"FirebaseMessaging": {
+			"presentationOptions": [
+				"alert",
+				"sound"
+			]
+		},
 		"SplashScreen": {
 			"launchShowDuration": 0,
 			"backgroundColor": "#000000",

@@ -9,7 +9,7 @@ Do not publish the hardened block until Email/Password Auth works for both staff
 - ian.arsenault@yahoo.com
 - janartys@gmail.com
 
-Keep this list identical to `STAFF_EMAILS` in `src/data.js`. Adding a staff member means updating **both** the rules and that array before they can write.
+Keep this list identical to `STAFF_EMAILS` in `src/data.js` and the relay allowlist in `push-relay/src/index.js`. Adding staff means updating all three. Push additionally requires `email_verified` in their Firebase ID token.
 
 ## Console setup (required once)
 
@@ -73,6 +73,8 @@ service cloud.firestore {
 Create the Auth users with those exact lowercase emails so the token email matches the allowlist.
 
 ## App behavior
+
+Favorites, library filters, and notification preferences do not create Firebase customer records or writes. Optional `availability` and the richer `lastSwap` fields share the existing `shop/live` document and are compatible with the shape rule above. Staff saves consume the existing Firestore quota; no Cloud Functions are required. See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
 After 7 taps on the heart, Manager unlock uses Firebase Email/Password for the allowlisted emails only. Auth persists in the browser so Firestore writes stay authenticated.
 

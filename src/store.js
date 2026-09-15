@@ -2,7 +2,10 @@ import {
   doc,
   onSnapshot,
   setDoc,
+  runTransaction,
+  updateDoc,
 } from "firebase/firestore";
+import { availabilityFor, swapPatch, undoPatch } from "./case-actions.js";
 import {
   HOURS_DETAIL,
   SEED_CATALOG,
@@ -97,6 +100,7 @@ function seedState() {
     lastNotice: null,
     instagram: cloneInstagram(SEED_INSTAGRAM),
     hoursOverride: null,
+    availability: {},
   };
 }
 
@@ -120,6 +124,7 @@ function load() {
         ? cloneInstagram(parsed.instagram)
         : cloneInstagram(SEED_INSTAGRAM),
       hoursOverride: parsed.hoursOverride ?? null,
+      availability: parsed.availability || {},
     };
   } catch {
     return seedState();
@@ -129,7 +134,8 @@ function load() {
 let state = load();
 
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch { /* A failed optional cache must not turn a successful server save into a failure. */ }
 }
 
 function emit() {
@@ -154,6 +160,7 @@ function livePayload() {
     lastNotice: state.lastNotice || null,
     hoursOverride: state.hoursOverride || null,
     instagram: cloneInstagram(state.instagram),
+    availability: state.availability || {},
   };
 }
 
@@ -165,7 +172,6 @@ function applyRemote(data) {
   const prevSwapAt = state.lastSwap?.at || 0;
   const prevNoticeAt = state.lastNotice?.at || 0;
   const merged = mergeSeedCatalog(data.catalog.map(hydrateFlavor));
-  const grew = merged.added > 0;
   state = {
     catalog: merged.catalog,
     caseIds: data.caseIds,
@@ -176,10 +182,10 @@ function applyRemote(data) {
       ? cloneInstagram(data.instagram)
       : cloneInstagram(SEED_INSTAGRAM),
     hoursOverride: data.hoursOverride ?? null,
+    availability: data.availability || {},
   };
   persist();
   emit();
-  if (grew) pushLive();
   if (state.lastSwap && state.lastSwap.at !== prevSwapAt) {
     window.dispatchEvent(
       new CustomEvent("janartys-remote-swap", { detail: state.lastSwap })
@@ -193,9 +199,9 @@ function applyRemote(data) {
   return true;
 }
 
-async function pushLive() {
+async function pushLive(patch = livePayload()) {
   try {
-    await setDoc(LIVE_REF, livePayload());
+    await setDoc(LIVE_REF, patch, { merge: true });
     if (syncStatus.writeError) {
       syncStatus.writeError = null;
       emit();
@@ -206,10 +212,10 @@ async function pushLive() {
   }
 }
 
-function persistLocalAndPush() {
+function persistLocalAndPush(patch) {
   persist();
   emit();
-  pushLive();
+  pushLive(patch);
 }
 
 function startLiveSync() {
@@ -224,9 +230,6 @@ function startLiveSync() {
         const wasLive = syncStatus.live;
         syncStatus.live = !snap.metadata.fromCache && !snap.metadata.hasPendingWrites;
         if (!snap.exists()) {
-          if (!snap.metadata.fromCache) setDoc(LIVE_REF, livePayload(), { merge: true }).catch(() => {
-            /* offline or rules not published yet */
-          });
           if (wasLive !== syncStatus.live) emit();
           return;
         }
@@ -288,7 +291,7 @@ export function setInstagram({ imageUrl, caption, permalink }) {
       updatedAt: Date.now(),
     },
   };
-  persistLocalAndPush();
+  persistLocalAndPush({ instagram: state.instagram });
 }
 
 export function resetInstagram() {
@@ -296,7 +299,7 @@ export function resetInstagram() {
     ...state,
     instagram: cloneInstagram({ ...SEED_INSTAGRAM, updatedAt: Date.now() }),
   };
-  persistLocalAndPush();
+  persistLocalAndPush({ instagram: state.instagram });
 }
 
 export function chicagoNow(date = new Date()) {
@@ -449,7 +452,7 @@ export function setHoursOverride(override) {
     ...state,
     hoursOverride: override,
   };
-  persistLocalAndPush();
+  persistLocalAndPush({ hoursOverride: state.hoursOverride });
 }
 
 export function clearHoursOverride() {
@@ -457,49 +460,57 @@ export function clearHoursOverride() {
     ...state,
     hoursOverride: null,
   };
-  persistLocalAndPush();
+  persistLocalAndPush({ hoursOverride: null });
 }
 
-export function swapPan(slot, inId) {
-  if (slot < 0 || slot > 7) return false;
-  const outId = state.caseIds[slot];
-  if (outId === inId) return false;
-  if (state.caseIds.includes(inId)) return false;
-  const incoming = flavorById(inId);
-  const outgoing = flavorById(outId);
-  if (!incoming || !outgoing) return false;
-
-  const next = [...state.caseIds];
-  next[slot] = inId;
-  state = {
-    ...state,
-    caseIds: next,
-    updatedAt: Date.now(),
-    lastSwap: {
-      slot,
-      outId,
-      inId,
-      outName: outgoing.name,
-      inName: incoming.name,
-      at: Date.now(),
-    },
-  };
-  persistLocalAndPush();
-  return true;
+async function changeLive(makePatch) {
+  const patch = await runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(LIVE_REF);
+    if (!snapshot.exists()) throw new Error("The live case is unavailable. Please reconnect and try again.");
+    const patch = makePatch(snapshot.data());
+    transaction.update(LIVE_REF, patch);
+    return patch;
+  });
+  state = { ...state, ...patch };
+  syncStatus.writeError = null;
+  persist();
+  emit();
+  return patch;
 }
 
-export function sendNotice(message) {
+export async function swapPan(slot, inId, expectedOutId = state.caseIds[slot]) {
+  const id = crypto.randomUUID();
+  const patch = await changeLive(current => swapPatch(current, slot, inId, expectedOutId, id));
+  return patch.lastSwap;
+}
+
+export async function undoLastSwap(expectedId) {
+  const patch = await changeLive(current => undoPatch(current, expectedId));
+  return patch.lastSwap;
+}
+
+export async function setFlavorAvailability(id, key, enabled) {
+  if (!["pintsAvailable", "runningLow"].includes(key)) return;
+  await changeLive(current => {
+    if (!current.catalog.some(f => f.id === id)) throw new Error("That flavor is no longer in the catalog.");
+    if (key === "runningLow" && !current.caseIds.includes(id)) throw new Error("That flavor is no longer in the freezer.");
+    return { availability: { ...current.availability, [id]: { ...availabilityFor(current, id), [key]: enabled === true, at: Date.now() } } };
+  });
+}
+
+export async function sendNotice(message) {
   const trimmed = String(message ?? "").trim();
   if (!trimmed) return null;
   const notice = {
+    id: crypto.randomUUID(),
     message: trimmed.slice(0, 100),
     at: Date.now(),
   };
-  state = {
-    ...state,
-    lastNotice: notice,
-  };
-  persistLocalAndPush();
+  await updateDoc(LIVE_REF, { lastNotice: notice });
+  state = { ...state, lastNotice: notice };
+  syncStatus.writeError = null;
+  persist();
+  emit();
   return notice;
 }
 
@@ -561,7 +572,7 @@ export function addFlavor({ name, note, dairyFree, color }) {
     catalog: [...state.catalog, flavor].sort(byFlavorName),
     updatedAt: Date.now(),
   };
-  persistLocalAndPush();
+  persistLocalAndPush({ catalog: state.catalog, updatedAt: state.updatedAt });
   return flavor;
 }
 
@@ -592,6 +603,7 @@ window.addEventListener("storage", (e) => {
         ? cloneInstagram(parsed.instagram)
         : cloneInstagram(SEED_INSTAGRAM),
       hoursOverride: parsed.hoursOverride ?? null,
+      availability: parsed.availability || {},
     };
     emit();
     if (state.lastSwap && state.lastSwap.at !== prevSwapAt) {
