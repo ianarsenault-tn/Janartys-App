@@ -350,11 +350,11 @@ button.status-cell:active { transform: scale(0.985); }
 /* ── Top-down freezer and flavor grid ────────────────── */
 .case {
   flex: 0 0 auto;
-  /* The 4px outer margin + 12px inset preserve the cards' 16px alignment. */
   margin: 2px 4px 12px;
-  padding: 16px 12px;
+  /* Leave 10px of clear liner inside the 8px rim and 2px gasket. */
+  padding: 20px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
   min-height: 0;
   position: relative;
@@ -446,6 +446,8 @@ button.status-cell:active { transform: scale(0.985); }
   margin-top: 1px;
 }
 .card-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-family: var(--heading);
   font-weight: 700;
   font-size: 12.5px;
@@ -478,6 +480,11 @@ button.status-cell:active { transform: scale(0.985); }
   color: var(--purple);
   display: inline-flex;
   align-items: center;
+}
+@media (max-width: 360px) {
+  .case .card { padding-left: 9px; padding-right: 9px; }
+  .case .card-top { gap: 6px; }
+  .case .scoop { width: 20px; height: 20px; flex-basis: 20px; }
 }
 .just-out {
   align-self: flex-start;
