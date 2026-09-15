@@ -49,11 +49,17 @@ function cloneInstagram(ig = SEED_INSTAGRAM) {
 }
 
 function mergeSeedCatalog(catalog) {
+  // Do not re-inflate the full seed into Firestore. Only backfill flavors
+  // referenced by the current case if a document is missing them.
   const ids = new Set(catalog.map((f) => f.id));
-  const extra = SEED_CATALOG.filter((s) => !ids.has(s.id)).map((f) => ({
-    ...f,
-    tags: Array.isArray(f.tags) ? [...f.tags] : [],
-  }));
+  const needed = SEED_CASE.filter((id) => !ids.has(id));
+  const extra = needed
+    .map((id) => SEED_CATALOG.find((s) => s.id === id))
+    .filter(Boolean)
+    .map((f) => ({
+      ...f,
+      tags: Array.isArray(f.tags) ? [...f.tags] : [],
+    }));
   const next = extra.length ? [...catalog, ...extra] : [...catalog];
   next.sort(byFlavorName);
   return { catalog: next, added: extra.length };

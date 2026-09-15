@@ -9,6 +9,8 @@ Do not publish the hardened block until Email/Password Auth works for both staff
 - ian.arsenault@yahoo.com
 - janartys@gmail.com
 
+Keep this list identical to `STAFF_EMAILS` in `src/data.js`. Adding a staff member means updating **both** the rules and that array before they can write.
+
 ## Console setup (required once)
 
 1. Firebase Console -> project janarty-s -> Authentication.
@@ -76,4 +78,15 @@ After 7 taps on the heart, Manager unlock uses Firebase Email/Password for the a
 
 ## Optional API key restrictions
 
-Google Cloud -> Credentials -> Browser key: HTTP referrer https://ianarsenault-tn.github.io/*. Does not replace rules.
+Defense in depth only — Firestore rules are the real lock.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) for project **janarty-s**.
+2. APIs & Services → Credentials → the Browser key used by this web app (same as `apiKey` in `src/firebase.js`).
+3. Application restrictions → **HTTP referrers**.
+4. Add:
+   - `https://ianarsenault-tn.github.io/*`
+   - `http://localhost:*` (local Vite)
+   - Capacitor/App Store builds do not use referrers the same way; leave a note if you later need iOS unrestricted or a separate iOS key.
+5. Save. Confirm What’s Out still loads and Manager swaps still work.
+
+Does not replace Auth + Firestore rules.

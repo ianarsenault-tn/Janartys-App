@@ -79,3 +79,16 @@ Staff unlock lasts for the browser tab (sessionStorage). Close the tab to requir
 ## Stack
 
 Vite plus vanilla JS, Firebase Firestore for the live case, wrapped with Capacitor for iOS. Mockups and brand tokens live in /workspace/janartys-research/mockups/.
+
+
+## Tests
+
+```
+npm test
+```
+
+Smoke checks: real `app.js` (not a stub), small seed covers the default case, staff allowlist, live document shape, and catalog merge no longer re-inflates the full seed into Firestore.
+
+## Instagram
+
+Manager can still paste an image URL + caption for What’s Out. Moving to the official Instagram Graph API needs a Meta Business app tied to @janartys, Instagram Graph permissions, and a small server or Cloud Function to refresh tokens — never put a long-lived Meta secret in the Capacitor client. Staff-paste remains the interim.
