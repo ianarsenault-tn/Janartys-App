@@ -55,9 +55,8 @@ button:disabled { cursor: default; opacity: 0.45; }
     0 60px 120px rgba(26, 18, 16, 0.1);
 }
 
-/* Every current iPhone, including 16 Pro Max (440pt) and landscape.
-   iPad stays the centered phone mock until we design a tablet layout. */
-@media (max-width: 500px), (max-height: 500px) {
+/* Compact phone and narrow iPad windows fill the available space. */
+@media (max-width: 699px), (max-height: 500px) {
   body {
     background: var(--cream);
     align-items: stretch;
@@ -516,10 +515,11 @@ button.status-cell:active { transform: scale(0.985); }
 .pans {
   padding: 0 16px 12px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 .pan {
+  min-width: 0;
   background: var(--white);
   border: 0;
   border-radius: 14px;

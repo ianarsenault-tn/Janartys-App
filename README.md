@@ -110,12 +110,25 @@ Hours overrides apply only to their stored shop date. The Instagram card is main
 ## Design, interaction, and accessibility
 
 - A branded splash appears for roughly one second on each page/app launch, with a bounded fallback so it cannot remain indefinitely.
-- The freezer has inner padding around its two-column card grid. Longer words, such as **Butterscotch**, scale only as needed; multiword names wrap between words. On very narrow screens, long names can use the full card width below the scoop to preserve readable type.
-- Phone layouts support portrait, landscape, dynamic viewport height, and safe-area insets around notches and the home indicator. Larger browser windows use a centered phone-width presentation.
+- The freezer has inner padding around its responsive card grid. Longer words, such as **Butterscotch**, scale only as needed; multiword names wrap between words. On narrow cards, long names can use the full card width below the scoop to preserve readable type.
+- Phone and iPad layouts support portrait, landscape, dynamic viewport height, and safe-area insets around notches and the home indicator. Wider app windows use a tablet layout capped at 1280px.
 - Subtle card presses, freezer entrance/arrival motion, and animated detail sheets provide feedback. Supported native devices add light haptics for flavor/favorite interactions and successful swaps.
 - Sheets support close buttons, backdrop dismissal, dragging the handle down, and Escape. Keyboard focus is contained within an open sheet and restored to the triggering control where available; background content becomes inactive.
 - Search fields preserve focus during filtering. Controls expose labels and selected states, and status changes use accessible announcements.
 - The system’s **Reduce Motion** preference disables decorative motion and haptic feedback.
+
+### iPad layout
+
+The same application and Firebase document serve both iPhone and iPad. Layouts respond to available window space rather than device detection:
+
+- Windows at least 700px wide and 501px tall use larger typography, roomier cards, and a horizontal icon-and-label navigation bar.
+- The freezer keeps two columns in portrait and switches to four columns in landscape when the window is at least 1000px wide. The eight pan IDs retain their order.
+- The flavor library and Favorites use two columns on smaller tablets and three at widths of 1000px or more.
+- The Instagram card places its image beside the caption. Alerts places preferences beside setup controls, and Manager places hours beside notice editing.
+- Detail and staff sheets are centered horizontally, capped at 640px, and remain scrollable. Search, favorites, staff controls, and existing sheet interactions are shared with the phone view.
+- Narrow multitasking windows and short landscape windows use the compact layout. Resizing or rotating does not reset the current view or require additional Firestore queries.
+
+Tablet layouts can be previewed in the browser. Native iPad builds require the usual Capacitor sync/Xcode build, with final device checks for safe areas, rotation, touch gestures, and multitasking.
 
 ## Notifications
 
@@ -268,7 +281,7 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 | `src/flavor-name-fit.js` | Responsive whole-word fitting for freezer titles. |
 | `src/staff-auth.js`, `src/staff-idle.js` | Staff authentication, password reset, and Manager idle sign-out. |
 | `src/sheet-interactions.js`, `src/feedback.js`, `src/native-chrome.js` | Sheet gestures/keyboard behavior, haptics, and native chrome. |
-| `src/*.css` | Brand styling, freezer frame, responsive layouts, and motion. |
+| `src/*.css`, including `src/tablet.css` | Brand styling, freezer frame, phone/tablet layouts, and motion. |
 | `public/`, `ios/` | Static assets and the native Xcode project. |
 | `push-relay/` | Cloudflare Worker, D1 migration, configuration, and relay tests. |
 | `scripts/enable-ios-push.mjs` | Validates the Firebase iOS plist before enabling the messaging plugin. |
@@ -281,6 +294,6 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 - The current catalog UI supports browsing and adding flavors; editing/deleting existing catalog entries is not exposed in Manager.
 - Native push activation and physical-iPhone delivery verification remain outstanding. Browser push notifications are not implemented.
 - Instagram updates are manual. [INSTAGRAM.md](INSTAGRAM.md) contains earlier planning notes for a possible automatic integration, not a deployed service; its Cloud Function proposal would need revisiting under the current cost constraint.
-- There is no dedicated tablet layout or Android native project. Larger browser windows use the phone-style presentation.
+- The iOS project supports iPhone and iPad. An Android native project is not included.
 
 For operational detail, use [FIRESTORE.md](FIRESTORE.md), [IOS.md](IOS.md), and [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).

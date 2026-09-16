@@ -18,6 +18,7 @@ export function fitFlavorNames(root) {
     title.style.removeProperty("font-size");
     const style = getComputedStyle(title);
     const base = parseFloat(style.fontSize);
+    const minimum = parseFloat(style.getPropertyValue("--flavor-name-min")) || 11;
     const spacing = parseFloat(style.letterSpacing) || 0;
     context.font = `${style.fontWeight} ${base}px ${style.fontFamily}`;
     const words = title.textContent.toLocaleUpperCase("en-US").split(/\s+/).filter(Boolean);
@@ -25,21 +26,22 @@ export function fitFlavorNames(root) {
     const sizeForWidth = () => Math.min(base, Math.floor(base * (title.clientWidth - 1) / longest * 10) / 10);
     let size = sizeForWidth();
     // On the narrowest phones, use the space below the scoop before making type
-    // too small to read. The two-column freezer layout stays intact.
-    if (size < 11) {
+    // too small to read. The freezer's responsive grid stays intact.
+    if (size < minimum) {
       header.classList.add("wide-name");
       size = sizeForWidth();
     }
-    title.style.fontSize = `${Math.max(11, size)}px`;
+    title.style.fontSize = `${Math.max(minimum, size)}px`;
   }
 }
 
 export function setupFlavorNameFitting(root) {
-  let width = 0;
+  let dimensions = "";
   const observer = new ResizeObserver(entries => {
-    const next = entries[0].contentRect.width;
-    if (next === width) return;
-    width = next;
+    const { width, height } = entries[0].contentRect;
+    const next = `${width}:${height}`;
+    if (next === dimensions) return;
+    dimensions = next;
     fitFlavorNames(root);
   });
   observer.observe(root);

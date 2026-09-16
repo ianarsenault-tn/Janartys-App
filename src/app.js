@@ -586,7 +586,7 @@ function renderCase() {
 }
 
 function renderCustomerCollection() {
-  root.innerHTML = `<div class="screen">${ui.view === "alerts" ? alertsHtml(getCustomer(), notificationStatus()) : libraryHtml(getState(), getCustomer(), ui)}${!customerStorageAvailable() ? '<p class="staff-message">Device storage is unavailable. Favorites will last until you close this app.</p>' : ""}</div>${customerNav(ui.view)}${ui.sheet === "story" ? renderStorySheet() : ""}`;
+  root.innerHTML = `<div class="screen collection-screen ${ui.view}-screen">${ui.view === "alerts" ? alertsHtml(getCustomer(), notificationStatus()) : libraryHtml(getState(), getCustomer(), ui)}${!customerStorageAvailable() ? '<p class="staff-message">Device storage is unavailable. Favorites will last until you close this app.</p>' : ""}</div>${customerNav(ui.view)}${ui.sheet === "story" ? renderStorySheet() : ""}`;
 }
 
 function renderNoticePreview() {
@@ -760,7 +760,7 @@ function renderManager() {
   if (ui.sheet === "notice-preview") sheet = renderNoticePreview();
 
   root.innerHTML = `
-    <div class="screen">
+    <div class="screen manager-screen">
       <header class="nav">
         ${coneSvg()}
         <div class="nav-copy">

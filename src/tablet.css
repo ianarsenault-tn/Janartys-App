@@ -1,0 +1,131 @@
+/* Adapt to the app window, including iPad multitasking, rather than a device name.
+   Short landscape iPhone windows retain the compact layout. */
+@media (min-width: 700px) and (min-height: 501px) {
+  #app, html.is-native #app {
+    width: 100%;
+    max-width: 1280px;
+    height: 100dvh;
+    max-height: none;
+    margin-inline: auto;
+  }
+
+  .nav { padding: calc(26px + env(safe-area-inset-top)) 32px 20px; }
+  .nav.brand { gap: 18px; padding-bottom: 20px; }
+  .nav.brand .nav-logo { width: 76px; height: 72px; margin: -4px 0 -4px -8px; }
+  .nav.brand .nav-logo .nav-mark { width: 64px; height: 56px; flex-basis: 64px; }
+  .nav.brand .nav-title { font-size: 32px; }
+  .nav.brand .nav-tagline { font-size: 12px; margin-top: 7px; }
+  .nav.brand .nav-screen { font-size: 14px; }
+  .case-meta { margin: 0 32px 20px; font-size: 13px; }
+  .status-row { padding: 0 28px 20px; gap: 16px; }
+  .status-cell { padding: 20px 22px; border-radius: 20px; }
+  .status-kicker { font-size: 14px; }
+  .status-detail { font-size: 17px; line-height: 1.45; }
+  .shop-notice { margin: 0 28px 20px; padding: 16px 20px; }
+  .shop-notice-label { font-size: 12px; }
+  .shop-notice p { font-size: 16px; }
+
+  .case { margin: 0 28px 24px; padding: 28px; gap: 16px; border-radius: 26px; }
+  .case::after { border-radius: 19px; }
+  .case .card { padding: 18px; min-height: 136px; border-radius: 18px; }
+  .card-top { gap: 12px; }
+  .scoop { width: 28px; height: 28px; flex-basis: 28px; }
+  .card-name { font-size: 17px; --flavor-name-min: 13px; }
+  .card-note { font-size: 15px; line-height: 1.5; margin-top: 12px; }
+  .card-chip { height: 24px; font-size: 12px; padding-inline: 10px; }
+  .card .stock-chip { font-size: 11px; padding: 4px 8px; }
+  .just-out { height: 23px; font-size: 11px; margin-bottom: 9px; }
+
+  .ig-card {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+    grid-template-rows: auto 1fr;
+    margin: 0 28px 28px;
+    border-radius: 20px;
+  }
+  .ig-card-photo { grid-column: 1; grid-row: 1 / span 2; aspect-ratio: auto; min-height: 230px; }
+  .ig-card-head { grid-column: 2; grid-row: 1; padding: 24px 26px 14px; gap: 13px; }
+  .ig-card-label { font-size: 12px; }
+  .ig-card-caption { grid-column: 2; grid-row: 2; padding: 8px 26px 24px; font-size: 16px; line-height: 1.6; display: block; }
+
+  .customer-nav { padding: 10px max(28px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(28px, env(safe-area-inset-left)); gap: 12px; }
+  .customer-nav button { min-height: 58px; flex-direction: row; gap: 10px; font-size: 13px; border-radius: 14px; }
+  .customer-nav svg { width: 24px; height: 24px; }
+  .collection-header { padding: calc(32px + env(safe-area-inset-top)) 32px 24px; }
+  .collection-kicker { font-size: 12px; }
+  .collection-header h1 { font-size: 34px; max-width: none; margin: 12px 0; }
+  .collection-header p { font-size: 16px; }
+  .library-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 0 28px; }
+  .library-search { flex: 1; min-width: 240px; }
+  .library-search input { min-height: 50px; }
+  .filter-chips { margin: 0; }
+  .filter-chips button { font-size: 13px; padding-inline: 16px; }
+  .result-count { font-size: 13px; padding: 20px 32px 12px; }
+  .flavor-library { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0 28px; }
+  .library-card { align-self: stretch; }
+  .library-detail { padding: 20px 0 20px 18px; gap: 14px; }
+  .library-scoop { flex-basis: 34px; height: 34px; }
+  .library-copy { gap: 10px; }
+  .library-copy strong { font-size: 16px; }
+  .library-note { font-size: 14px; line-height: 1.5; }
+  .case-chip, .stock-chip { font-size: 11px; }
+  .favorite-button { margin: 12px 8px 0 0; min-width: 48px; min-height: 48px; }
+  .library-empty { grid-column: 1 / -1; padding: 48px 16px; }
+  .device-note { padding: 20px 32px 28px; font-size: 12px; }
+
+  .alerts-screen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; column-gap: 24px; padding-bottom: 28px; }
+  .alerts-screen .collection-header, .alerts-screen > .staff-message { grid-column: 1 / -1; }
+  .alert-options { margin: 0 0 0 28px; align-self: start; }
+  .alert-option { padding: 22px 20px; gap: 20px; min-width: 0; }
+  .alert-option strong { font-size: 16px; }
+  .alert-option small { font-size: 14px; }
+  .alert-setup { margin: 0 28px 0 0; padding: 24px; background: white; border-radius: 18px; align-self: start; }
+  .alert-status { font-size: 15px; line-height: 1.55; }
+
+  .sheet {
+    left: max(24px, calc((100% - 640px) / 2));
+    right: max(24px, calc((100% - 640px) / 2));
+    bottom: max(24px, env(safe-area-inset-bottom));
+    max-height: calc(100% - 72px - env(safe-area-inset-top));
+    border-radius: 24px;
+    padding-inline: 28px;
+  }
+  .sheet-controls { top: -6px; }
+  .story-head .sheet-title { font-size: 28px; }
+  .story-body { font-size: 18px; line-height: 1.55; }
+  .story-actions { gap: 16px; margin: 20px 0 10px; }
+  .story-actions .favorite-button, .story-actions .text-button { font-size: 14px; }
+  .sheet .device-note { padding: 16px 0; }
+  .sheet .shop-notice { margin-inline: 0; }
+  .swap-sheet .catalog { min-height: 180px; max-height: 35dvh; }
+
+  .manager-screen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
+  .manager-screen > * { grid-column: 1 / -1; min-width: 0; }
+  .manager-screen > .hours-mgr, .manager-screen > .notice-mgr { grid-column: auto; }
+  .manager-screen .hint { padding: 0 32px 20px; font-size: 15px; }
+  .pans { padding: 0 28px 20px; gap: 14px; }
+  .pan { height: auto; min-height: 132px; padding: 16px 12px; }
+  .pan-num { font-size: 10px; }
+  .pan-scoop { width: 30px; height: 30px; flex-shrink: 0; margin-block: 4px 10px; }
+  .pan-name { font-size: 13px; line-height: 1.3; display: block; overflow-wrap: anywhere; }
+  .pan-stock { font-size: 11px; }
+  .mgr-actions { padding: 0 28px 20px; }
+  .mgr-actions .ghost-btn { flex: 0 1 240px; }
+  .undo-panel, .staff-message { margin-inline: 28px; font-size: 14px; }
+  .manager-screen > .ig-mgr { margin: 0 28px 24px; padding: 22px; background: white; border-radius: 20px; }
+  .manager-screen > .hours-mgr { margin-right: 12px; }
+  .manager-screen > .notice-mgr { margin-left: 12px; }
+  .manager-screen .ig-mgr-sub { font-size: 14px; line-height: 1.5; }
+}
+
+@media (min-width: 1000px) and (min-height: 501px) {
+  .flavor-library { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1000px) and (min-height: 501px) and (orientation: landscape) {
+  .case { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .case .card { padding: 16px; min-height: 158px; }
+  .card-top { gap: 10px; }
+  .card-name { font-size: 16px; }
+  .card-note { font-size: 14px; }
+}
