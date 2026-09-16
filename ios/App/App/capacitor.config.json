@@ -18,7 +18,7 @@
 			}
 		}
 	},
-	"backgroundColor": "#000000",
+	"backgroundColor": "#FFF8F0",
 	"server": {
 		"androidScheme": "https"
 	},
@@ -35,12 +35,12 @@
 		},
 		"SplashScreen": {
 			"launchShowDuration": 0,
-			"backgroundColor": "#000000",
+			"backgroundColor": "#FFF8F0",
 			"showSpinner": false
 		},
 		"StatusBar": {
 			"style": "DARK",
-			"backgroundColor": "#000000"
+			"backgroundColor": "#FFF8F0"
 		}
 	},
 	"packageClassList": [
