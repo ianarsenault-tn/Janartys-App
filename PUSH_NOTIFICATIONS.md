@@ -36,6 +36,21 @@ Native reference: [Capawesome Firebase Cloud Messaging](https://capawesome.io/do
 
 ## Delivery behavior
 
+### Request rate limits
+
+The Worker uses Cloudflare rate-limit bindings with no Firebase calls or database counters:
+
+- **120 requests per 60 seconds per IP address**, before authentication, body parsing, D1, or FCM. Health checks, browser preflights, unknown routes, and requests while sending is disabled all count. The key uses Cloudflare's `CF-Connecting-IP`, never a client-supplied forwarded address or token. Missing IP metadata shares an `unknown` bucket.
+- **20 publish attempts per 60 seconds per verified staff UID**, after authentication and before reading the body or accessing D1. Refreshing a token or changing networks does not reset that staff identity's bucket within a Cloudflare location.
+- Rejections return **HTTP 429**, `Retry-After: 60`, and the usual CORS headers for approved origins. The app does not automatically retry a push. Staff's already-saved shop edit is unaffected.
+- If a limiter is missing or unavailable, the Worker stops processing and returns 502. Authentication and the existing 100-event daily send cap remain separate controls.
+
+The anonymous IP limit is deliberately generous because customers/staff can share shop Wi-Fi or a mobile-network address. Ordinary customer browsing does not call this relay; native notification setup checks `/health`.
+
+Cloudflare enforces these approximate limits per location with eventually consistent counters. They are abuse controls, not a strict global billing limit. Rejected requests still invoke the Worker and count toward its request usage; the limiter reduces downstream authentication, D1, and FCM work. It does not add a Cloudflare Access login gate, a Firebase service, or a paid plan upgrade. See [Cloudflare's rate-limit binding documentation](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
+
+### Notification events
+
 - **Favorite flavors** follows saved IDs. **New flavors** means any flavor joining the freezer, including returning flavors. **Shop announcements** follows staff notices. All choices start off.
 - A single FCM OR condition covers favorite plus new-flavor subscribers, avoiding duplicate messages for people choosing both. Topics contain public shop information, not private customer data.
 - Flavor pushes open `#/flavor/<id>`; announcements open the freezer. Flavors removed from today's case remain in the library.
@@ -67,4 +82,4 @@ npx wrangler d1 migrations apply janartys-push-events --remote
 npm run deploy
 ```
 
-Tests cover consent/filter/topics, stale swap protection, undo/expiry, message construction, invalid authorization, deduplication, and the send cap. Local UI checks use blocked Firestore traffic and mocked staff saves. They do not replace signed iPhone/APNs delivery or authenticated production staff testing.
+Tests cover consent/filter/topics, stale swap protection, undo/expiry, message construction, invalid authorization, deduplication, the send cap, and request/staff rate-limit rejection before protected work. Rate-limit tests also cover CORS/retry headers, stable identity keys, normal health/preflight handling, and unavailable bindings. Local UI checks use blocked Firestore traffic and mocked staff saves. They do not replace signed iPhone/APNs delivery or authenticated production staff testing.

@@ -7,5 +7,9 @@
   "account_id": "5fde835414d3b41d0f3e1ccc075e2b1f",
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
   "vars": { "FIREBASE_PROJECT_ID": "janarty-s", "PUSH_ENABLED": "false" },
+  "ratelimits": [
+    { "name": "REQUEST_RATE_LIMITER", "namespace_id": "2026091601", "simple": { "limit": 120, "period": 60 } },
+    { "name": "STAFF_RATE_LIMITER", "namespace_id": "2026091602", "simple": { "limit": 20, "period": 60 } }
+  ],
   "d1_databases": [{ "binding": "DB", "database_name": "janartys-push-events", "database_id": "e6eca663-a76f-4571-b275-a164561e0bfe", "migrations_dir": "migrations" }]
 }

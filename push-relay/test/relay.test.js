@@ -11,8 +11,8 @@ function database() {
   return { prepare(query) { return { bind(...args) { const stmt = sql.prepare(query); return { async run() { return stmt.run(...args); }, async first() { return stmt.get(...args) || null; } }; } }; } };
 }
 const event = () => ({ id: crypto.randomUUID(), at: Date.now(), kind: "flavor", flavorId: "lavender", name: "Blueberry Lavender" });
-const request = data => new Request("https://relay.test/publish", { method: "POST", headers: { Origin: "https://ianarsenault-tn.github.io", "Content-Type": "application/json" }, body: JSON.stringify(data) });
-const environment = () => ({ FIREBASE_PROJECT_ID: "janarty-s", PUSH_ENABLED: "true", FCM_SERVICE_ACCOUNT: "test-secret", DB: database() });
+const request = data => new Request("https://relay.test/publish", { method: "POST", headers: { Origin: "https://ianarsenault-tn.github.io", "Content-Type": "application/json", "CF-Connecting-IP": "192.0.2.1" }, body: JSON.stringify(data) });
+const environment = () => ({ FIREBASE_PROJECT_ID: "janarty-s", PUSH_ENABLED: "true", FCM_SERVICE_ACCOUNT: "test-secret", DB: database(), REQUEST_RATE_LIMITER: { limit: async () => ({ success: true }) }, STAFF_RATE_LIMITER: { limit: async () => ({ success: true }) } });
 
 test("messages use one topic condition for favorites and all-new-flavor followers", () => {
   const message = buildMessage(validateEvent(event()));
@@ -37,7 +37,7 @@ test("missing/forged staff credentials and unapproved origins cannot send", asyn
 });
 test("duplicate events send exactly once using a real SQLite unique constraint", async () => {
   let sent = 0;
-  const handler = createHandler({ verifyStaff: async () => {}, accessToken: async () => "test", send: async () => { sent++; return new Response('{}'); } });
+  const handler = createHandler({ verifyStaff: async () => "staff-one", accessToken: async () => "test", send: async () => { sent++; return new Response('{}'); } });
   const env = environment(), data = event();
   const responses = await Promise.all([handler.fetch(request(data), env), handler.fetch(request(data), env)]);
   assert.equal(sent, 1);
@@ -47,7 +47,7 @@ test("duplicate events send exactly once using a real SQLite unique constraint",
 });
 test("failed sends are not retried and the daily cap stops extra sends", async () => {
   let sent = 0;
-  const handler = createHandler({ verifyStaff: async () => {}, accessToken: async () => "test", send: async () => { sent++; return new Response('', { status: 500 }); } });
+  const handler = createHandler({ verifyStaff: async () => "staff-one", accessToken: async () => "test", send: async () => { sent++; return new Response('', { status: 500 }); } });
   const env = environment(), data = event();
   assert.equal((await handler.fetch(request(data), env)).status, 502);
   assert.equal((await handler.fetch(request(data), env)).status, 409);
@@ -57,7 +57,7 @@ test("failed sends are not retried and the daily cap stops extra sends", async (
   assert.equal(sent, 1);
 });
 test("oversized and invalid payloads are rejected before any database write", async () => {
-  const handler = createHandler({ verifyStaff: async () => {}, accessToken: async () => "test", send: async () => new Response() });
+  const handler = createHandler({ verifyStaff: async () => "staff-one", accessToken: async () => "test", send: async () => new Response() });
   assert.equal((await handler.fetch(request({ ...event(), message: "x".repeat(3000) }), environment())).status, 413);
   assert.equal((await handler.fetch(request({}), environment())).status, 400);
 });

@@ -12,6 +12,7 @@ export async function verifyStaff(request, project) {
   if (!authorization.startsWith("Bearer ")) throw new Error("Unauthorized");
   const { payload } = await jwtVerify(authorization.slice(7), keys, { algorithms: ["RS256"], issuer: `https://securetoken.google.com/${project}`, audience: project });
   if (!payload.sub || !staff.has(String(payload.email)) || payload.email_verified !== true) throw new Error("Unauthorized");
+  return payload.sub;
 }
 
 /** @param {Env & { FCM_SERVICE_ACCOUNT?: string }} env */
@@ -35,8 +36,22 @@ export function createHandler(dependencies = { verifyStaff, accessToken, send: f
     /** @param {Request} request @param {Env & { FCM_SERVICE_ACCOUNT?: string }} env */
     async fetch(request, env) {
       const origin = request.headers.get("Origin");
-      const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "Vary": "Origin", ...(origin && origins.has(origin) ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" } : {}) };
-      const reply = (status, body) => new Response(JSON.stringify(body), { status, headers });
+      const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "Vary": "Origin", ...(origin && origins.has(origin) ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Expose-Headers": "Retry-After" } : {}) };
+      const reply = (status, body, extraHeaders = {}) => new Response(JSON.stringify(body), { status, headers: { ...headers, ...extraHeaders } });
+      const limited = () => reply(429, { error: "Too many requests. Please wait a minute before trying again." }, { "Retry-After": "60" });
+      const limiterUnavailable = () => reply(502, { error: "Request protection is temporarily unavailable" }, { "Retry-After": "60" });
+      // Cloudflare supplies this header at ingress. Do not trust X-Forwarded-For,
+      // client IDs, token text, paths, or query parameters as anonymous identities.
+      // A generous shared-IP limit protects pre-auth work without identifying users.
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+      try {
+        const { success } = await env.REQUEST_RATE_LIMITER.limit({ key: `janartys-push-relay:request:${ip}` });
+        if (!success) return limited();
+      } catch {
+        // Fail closed before auth, body parsing, D1, or FCM if a binding is missing
+        // or unavailable. Do not log client IPs, tokens, or exception contents.
+        return limiterUnavailable();
+      }
       if (origin && !origins.has(origin)) return reply(403, { error: "Origin not allowed" });
       const path = new URL(request.url).pathname;
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
@@ -44,8 +59,13 @@ export function createHandler(dependencies = { verifyStaff, accessToken, send: f
       if (path === "/health" && request.method === "GET") return reply(200, { ready });
       if (path !== "/publish" || request.method !== "POST") return reply(404, { error: "Not found" });
       if (!ready) return reply(503, { error: "Notifications are not active" });
-      try { await dependencies.verifyStaff(request, env.FIREBASE_PROJECT_ID); }
+      let staffId;
+      try { staffId = await dependencies.verifyStaff(request, env.FIREBASE_PROJECT_ID); }
       catch { return reply(401, { error: "Staff sign-in required" }); }
+      try {
+        const { success } = await env.STAFF_RATE_LIMITER.limit({ key: `janartys-push-relay:staff:${staffId}` });
+        if (!success) return limited();
+      } catch { return limiterUnavailable(); }
       let event;
       try {
         // Bound the body even for requests using chunked transfer encoding.

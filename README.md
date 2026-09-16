@@ -157,6 +157,8 @@ The prepared delivery path is:
 
 The relay has a cap of 100 new send attempts per rolling 24 hours. A single topic condition avoids duplicate flavor alerts for customers following both favorite and new-flavor categories. Uncertain sends are not retried automatically; messages expire after 30 minutes. Manual edits in Firebase Console do not trigger pushes, and undo does not send another flavor alert.
 
+Cloudflare rate-limit bindings also allow 120 incoming requests per minute per IP and 20 publish attempts per minute per verified staff member, enforced approximately per Cloudflare location. Excess traffic receives HTTP 429 before protected work, with a 60-second retry hint. These checks use no Firebase calls or database counters. Incoming Worker requests still consume Cloudflare request quota; this is not a global billing cap. See [request rate limits](PUSH_NOTIFICATIONS.md#request-rate-limits).
+
 See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) for Apple/APNs configuration, Firebase sender credentials, relay activation, delivery limitations, and physical-device acceptance checks. Permission, background delivery, and notification taps still require testing on a signed iPhone build before production activation.
 
 ## Data, synchronization, and cost
