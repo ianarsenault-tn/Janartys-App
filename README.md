@@ -237,6 +237,8 @@ npx cap open ios
 
 Native status-bar, splash-screen, and haptics plugins are included. See [IOS.md](IOS.md) for native notes. Push setup is a separate step: install the correct Firebase iOS plist with App target membership, complete Apple/APNs configuration, then follow [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) before running `npm run ios:enable-push` and syncing again.
 
+The app icon uses Janarty’s heart-and-cone mark with its blue/purple-to-pink gradient on black. The [1024×1024 PNG](public/brand/janartys-app-icon.png) is included in the iOS AppIcon asset catalog; matching browser and Apple home-screen icons are linked from the web app. See [branding assets](public/brand/README.md) for file sizes and update instructions.
+
 GitHub Pages publishing does not update an installed iOS binary. Native changes require another sync/build and the appropriate iOS distribution process.
 
 ## Validation and deployment
