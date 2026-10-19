@@ -105,7 +105,7 @@ Hours overrides apply only to their stored shop date. The Instagram card is main
 - Sign-in includes readable errors, a password-reset action for allowlisted staff, and a local cooldown after repeated failed attempts.
 - Firebase Auth may persist a signed-in session across reloads. Closing a tab alone does not guarantee sign-out.
 - Explicit **Log out** ends the session. Manager also signs staff out after 15 minutes of inactivity while Manager is open.
-- Production Firestore rules must enforce write access. A hidden Manager entry point and client-side allowlist are not substitutes for those rules.
+- Firestore rules restrict writes to the approved Firebase account IDs and their matching staff emails. A hidden Manager entry point and client-side allowlist cannot grant database access. See [FIRESTORE.md](FIRESTORE.md).
 
 ## Design, interaction, and accessibility
 
@@ -247,6 +247,7 @@ GitHub Pages publishing does not update an installed iOS binary. Native changes 
 
 ```sh
 npm test
+npm run test:rules
 npm ci --prefix push-relay
 npm run check --prefix push-relay
 npm run test:relay
@@ -254,6 +255,7 @@ npm run build
 ```
 
 - App tests cover the app/data structure, staff allowlist, catalog behavior, display timestamps, notice expiry, favorites/filtering/topic consent, stale-swap protection, undo, and availability expiry.
+- Firestore rules tests use a local emulator and require Java 21+. They check exact staff UID/email authorization, public read-only access, legitimate staff edits/transactions, and rejected deletion, invalid data, and unrelated document access. They never write to the live Firebase project.
 - Relay checks generate Worker types and run TypeScript validation. Relay tests cover message construction, invalid authorization/origins, duplicate prevention, failed-send handling, payload limits, and the daily send cap.
 - The September 2026 feature release also received local browser checks for the full 152-flavor catalog across 14 phone-sized portrait/landscape viewports, favorites persistence, notification choices/deep links, and staff workflows using mocked saves. These were release checks, not an automated Xcode/device test suite.
 - For future UI changes, check narrow and large phone layouts, landscape scrolling, long names, reduced motion, sheet dismissal/focus, and safe-area behavior. Validate native delivery on a real signed device when push is activated.

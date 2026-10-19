@@ -1,94 +1,66 @@
-# Firestore rules (janarty-s)
+# Firestore access (janarty-s)
 
-The web apiKey in src/firebase.js is public by design. These rules stop strangers from rewriting the live case.
+The authoritative rules are [firestore.rules](firestore.rules), deployed using [firebase.json](firebase.json). The Firebase web API key is public client configuration; the database rules enforce access. Never publish unrestricted writes, even temporarily while setting up sign-in.
 
-Do not publish the hardened block until Email/Password Auth works for both staff users. Publishing early will block Manager writes.
+## Authorized staff
 
-## Staff allowlist
+Only these existing Firebase Authentication accounts may create or update `shop/live`. Both the UID and its matching email must be present in the authenticated Firebase token:
 
-- ian.arsenault@yahoo.com
-- janartys@gmail.com
+| Staff email | Approved Firebase UID |
+| --- | --- |
+| `ian.arsenault@yahoo.com` | `KcRs37Q7yVbLiZNuk2m0q0Rqjx72` |
+| `janartys@gmail.com` | `7a7vnB6g64Yxnp1pXROYYOUoKzz2` |
 
-Keep this list identical to `STAFF_EMAILS` in `src/data.js` and the relay allowlist in `push-relay/src/index.js`. Adding staff means updating all three. Push additionally requires `email_verified` in their Firebase ID token.
+These identities were checked in the project's Authentication console on October 19, 2026. UIDs identify accounts; they are not passwords or bearer credentials. A newly created account cannot gain access just by claiming a listed email. Recreating a deleted staff account gives it a different UID and requires explicit approval and a rules update.
 
-## Console setup (required once)
+Firestore access is based on these approved account identities and does not additionally require email verification, preserving existing staff sign-in. The notification relay separately requires a verified email; do not remove that requirement when configuring push.
 
-1. Firebase Console -> project janarty-s -> Authentication.
-2. Sign-in method -> enable Email/Password -> Save.
-3. Users -> Add user for each staff email. Set a strong password (share privately). Console-created users are usually already verified.
-4. Authentication -> Settings -> Authorized domains: include ianarsenault-tn.github.io (and localhost for local Vite).
-5. After a successful Manager unlock in the app, publish the hardened rules (Firestore -> Rules -> Publish).
+The browser's `STAFF_EMAILS` in `src/data.js` controls the Manager sign-in UI and password-reset eligibility. It cannot grant database access. The relay's allowlist is in `push-relay/src/index.js`.
 
-## Current (open writes - keep until Auth unlock works)
+## What the rules allow
 
-```
-rules_version = "2";
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /shop/live {
-      allow read: if true;
-      allow write: if true;
-    }
-  }
-}
-```
+- Anyone may read the public flavor board at exactly `shop/live`.
+- Only the two approved UID/email pairs may create or update it.
+- Staff updates must preserve the existing required fields, eight-pan list, numeric update timestamp, and catalog limit of 500 entries.
+- Validation checks the resulting document, so partial hours, notice, catalog, Instagram, stock, swap, and undo updates remain supported. Optional `availability` and richer `lastSwap` fields remain compatible.
+- No app client, including staff, may delete the live board.
+- All other documents and subcollections are denied by default.
 
-## Hardened (publish after Auth works)
+Google Cloud/Firebase administrators and server service accounts with IAM privileges bypass client Security Rules. Keep those administrative permissions limited to trusted operators; these rules govern customer/staff app requests, not console administrator access.
 
-```
-rules_version = "2";
-service cloud.firestore {
-  match /databases/{database}/documents {
+## Staff setup and removal
 
-    function isStaff() {
-      return request.auth != null
-        && request.auth.token.email in [
-          "ian.arsenault@yahoo.com",
-          "janartys@gmail.com"
-        ];
-    }
+1. Enable Email/Password sign-in in Firebase Authentication for project `janarty-s`.
+2. Provision each approved staff account using its exact lowercase email and a strong password shared privately.
+3. Verify the account's actual UID in Authentication; never authorize a UID supplied by an untrusted client.
+4. Add an exact UID/email pair to `firestore.rules` only when a new staff member is authorized. Update the UI/relay email lists and regression tests as appropriate.
+5. Keep the web app's authorized domain configured. Verify sign-in and rules tests before deployment; do not open database writes to troubleshoot.
+6. When removing staff, remove their UID from the rules and publish, then disable their Auth account/revoke sessions and remove applicable UI/relay access. Deleting or disabling an account alone does not immediately invalidate an already issued ID token.
 
-    function isLiveShape() {
-      let d = request.resource.data;
-      return d.keys().hasAll([
-          "catalog", "caseIds", "updatedAt", "lastSwap",
-          "lastNotice", "hoursOverride", "instagram"
-        ])
-        && d.catalog is list
-        && d.caseIds is list
-        && d.caseIds.size() == 8
-        && d.updatedAt is number
-        && d.catalog.size() <= 500;
-    }
+Favorites and alert preferences remain on the device and require no customer database writes. This change adds no Firebase service, billing upgrade, or per-request database lookup.
 
-    match /shop/live {
-      allow read: if true;
-      allow create, update: if isStaff() && isLiveShape();
-      allow delete: if false;
-    }
-  }
-}
+## Test and deploy
+
+Install Node.js and Java 21 or later, then:
+
+```sh
+npm ci
+npm run test:rules
 ```
 
-Create the Auth users with those exact lowercase emails so the token email matches the allowlist.
+The test command starts only a local Firestore emulator with the non-production project `demo-janartys-rules`. The tests refuse to run without `FIRESTORE_EMULATOR_HOST=127.0.0.1:8087`; they never use the production Firebase configuration. Tests cover unauthorized writes, newly created accounts claiming staff emails, exact UID/email matching, both existing staff accounts, partial updates, transactions, create/delete restrictions, invalid shapes, sibling paths, subcollections, and atomic batch rejection. GitHub Pages CI runs this suite before publishing the app.
 
-## App behavior
+After reviewing and testing a rules change, deploy only Firestore rules to the explicit project:
 
-Favorites, library filters, and notification preferences do not create Firebase customer records or writes. Optional `availability` and the richer `lastSwap` fields share the existing `shop/live` document and are compatible with the shape rule above. Staff saves consume the existing Firestore quota; no Cloud Functions are required. See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
+```sh
+npx firebase login
+npx firebase deploy --only firestore:rules --project janarty-s
+```
 
-After 7 taps on the heart, Manager unlock uses Firebase Email/Password for the allowlisted emails only. Auth persists in the browser so Firestore writes stay authenticated.
+Alternatively, paste the exact contents of `firestore.rules` into the Firebase Console Rules editor, test in Rules Playground, and publish. Confirm the published rules match this file. Keep the previous published version in Console history for rollback, and never revert to an unrestricted configuration.
 
-## Optional API key restrictions
+GitHub Pages deployment does not deploy database rules. Check the live published rules separately after every rules deployment. Use the emulator/Rules Playground for authorization checks so testing does not change customer-visible flavors or send notifications.
 
-Defense in depth only — Firestore rules are the real lock.
+On October 19, 2026, the live baseline already had staff email restrictions, shape checks, and delete denial. The outdated open-write example in this document did not reflect that live baseline; it has been removed. The checked-in rules add exact account-ID binding.
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/) for project **janarty-s**.
-2. APIs & Services → Credentials → the Browser key used by this web app (same as `apiKey` in `src/firebase.js`).
-3. Application restrictions → **HTTP referrers**.
-4. Add:
-   - `https://ianarsenault-tn.github.io/*`
-   - `http://localhost:*` (local Vite)
-   - Capacitor/App Store builds do not use referrers the same way; leave a note if you later need iOS unrestricted or a separate iOS key.
-5. Save. Confirm What’s Out still loads and Manager swaps still work.
-
-Does not replace Auth + Firestore rules.
+The account-ID rules were published to `janarty-s` on October 19, 2026 at 10:30 AM America/Chicago. The published version was checked in Console. Rules Playground allowed public reads and updates under both approved identities, while denying anonymous updates and an unapproved UID claiming a staff email. Local emulator tests also verified all staff editing workflows and rejected invalid or unauthorized writes. These checks did not write to the live flavor board or send notifications.

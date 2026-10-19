@@ -10,11 +10,14 @@
     "cap:sync": "npm run build && npx cap sync",
     "test": "node --test test/smoke.test.js test/presentation.test.js test/customer.test.js",
     "test:relay": "npm --prefix push-relay test",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-janartys-rules \"node --test test/firestore-rules.test.js\"",
     "ios:enable-push": "node scripts/enable-ios-push.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.1",
     "@capacitor/ios": "^8.5.1",
+    "@firebase/rules-unit-testing": "5.0.0",
+    "firebase-tools": "15.34.0",
     "vite": "^6.3.5"
   },
   "dependencies": {

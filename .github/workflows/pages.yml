@@ -24,6 +24,11 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm run test:rules
       - run: npm ci --prefix push-relay
       - run: npm run check --prefix push-relay
       - run: npm run test:relay

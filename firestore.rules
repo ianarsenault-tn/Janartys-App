@@ -1,0 +1,36 @@
+rules_version = "2";
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Authorize the existing accounts, not anyone claiming a staff email.
+    // Recreated accounts receive new UIDs and require explicit approval here.
+    function isStaff() {
+      return request.auth != null && (
+        (request.auth.uid == "KcRs37Q7yVbLiZNuk2m0q0Rqjx72"
+          && request.auth.token.email == "ian.arsenault@yahoo.com")
+        || (request.auth.uid == "7a7vnB6g64Yxnp1pXROYYOUoKzz2"
+          && request.auth.token.email == "janartys@gmail.com")
+      );
+    }
+
+    // Validate the resulting document, including after partial staff updates.
+    function isLiveShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          "catalog", "caseIds", "updatedAt", "lastSwap",
+          "lastNotice", "hoursOverride", "instagram"
+        ])
+        && d.catalog is list
+        && d.caseIds is list
+        && d.caseIds.size() == 8
+        && d.updatedAt is number
+        && d.catalog.size() <= 500;
+    }
+
+    match /shop/live {
+      allow read: if true;
+      allow create, update: if isStaff() && isLiveShape();
+      allow delete: if false;
+    }
+    // Every other document and subcollection is denied by default.
+  }
+}

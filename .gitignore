@@ -14,4 +14,7 @@ xcuserdata/
 GoogleService-Info.plist
 *.p8
 *service-account*.json
+firebase-debug.log*
+firestore-debug.log*
+.firebase/
 push-relay/worker-configuration.d.ts
