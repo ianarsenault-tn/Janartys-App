@@ -55,8 +55,8 @@ export function setupStaffIdleTimeout({ isManagerActive, onTimeout }) {
   }
 
   function onActivity() {
-    if (isManagerActive() && isStaffSignedIn()) arm();
-    else clearTimer();
+    // Reset wasActive on the unlock form so a rapid re-login rearms the timer.
+    arm();
   }
 
   for (const type of ACTIVITY_EVENTS) {

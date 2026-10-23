@@ -49,6 +49,34 @@ test("activity resets idle logout and customer navigation disarms it", async () 
   assert.equal(h.backend.signOutCalls, 0);
 });
 
+test("rapid logout and re-login rearms idle logout without further Manager activity", async () => {
+  const h = await managerHarness();
+  const idleTimers = () => [...h.timers].filter(([, timer]) => timer.ms === 15 * 60 * 1000);
+  await h.fireTimer(1000, true);
+  assert.equal(idleTimers().length, 1);
+  await h.click("staff-logout");
+  // Capture-phase input on the unlock form clears the previous session's timer.
+  await h.document.fire("input");
+  assert.equal(idleTimers().length, 0);
+  await h.input("staff-email", "staff@example.com");
+  await h.input("staff-pass", "test password");
+  await h.submit("staff-form");
+  await settle();
+  assert.equal(h.backend.signedIn, true);
+  assert.match(h.root.innerHTML, /data-act="staff-logout"/);
+  // Logout and re-login both completed before the next one-second monitor tick.
+  await h.fireTimer(1000, true);
+  const rearmed = idleTimers();
+  assert.equal(rearmed.length, 1);
+  await h.fireTimer(1000, true);
+  assert.deepEqual(idleTimers(), rearmed, "monitor polling must not extend the idle deadline");
+  await h.fireTimer(15 * 60 * 1000);
+  assert.equal(h.backend.signOutCalls, 2);
+  assert.equal(h.backend.signedIn, false);
+  assert.match(h.root.innerHTML, /data-act="staff-form"/);
+  assert.match(h.root.innerHTML, /Signed out after 15 minutes idle\./);
+});
+
 const saves = [
   ["hours override", h => h.store.setHoursOverride({ date: "2026-10-22", closed: true }), "hoursOverride"],
   ["normal hours", h => h.store.clearHoursOverride(), "hoursOverride"],
