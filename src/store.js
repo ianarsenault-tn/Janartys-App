@@ -2,9 +2,9 @@ import {
   doc,
   onSnapshot,
   runTransaction,
-  updateDoc,
 } from "firebase/firestore";
 import { availabilityFor, swapPatch, undoPatch } from "./case-actions.js";
+import { safeImageSrc } from "./presentation.js";
 import {
   HOURS_DETAIL,
   SEED_CATALOG,
@@ -232,12 +232,14 @@ export function getInstagram() {
 }
 
 export async function setInstagram({ imageUrl, caption, permalink }) {
-  const nextUrl = String(imageUrl ?? "").trim();
+  // An empty draft retains the existing reset-to-default behavior.
+  const nextUrl = safeImageSrc(String(imageUrl ?? "").trim() || SEED_INSTAGRAM.imageUrl);
+  if (!nextUrl) throw new Error("Enter a valid HTTPS image URL, or leave it blank to use the default photo.");
   const nextCap = String(caption ?? "").trim();
   const nextLink = String(permalink ?? "").trim();
   await changeLive(current => ({
     instagram: {
-      imageUrl: nextUrl || SEED_INSTAGRAM.imageUrl,
+      imageUrl: nextUrl,
       caption: nextCap,
       permalink: nextLink || SEED_INSTAGRAM.permalink,
       handle: current.instagram?.handle || SEED_INSTAGRAM.handle,
@@ -458,11 +460,7 @@ export async function sendNotice(message) {
     message: trimmed.slice(0, 100),
     at: Date.now(),
   };
-  await updateDoc(LIVE_REF, { lastNotice: notice });
-  state = { ...state, lastNotice: notice };
-  syncStatus.writeError = null;
-  persist();
-  emit();
+  await changeLive(() => ({ lastNotice: notice }));
   return notice;
 }
 

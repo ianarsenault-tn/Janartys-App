@@ -15,13 +15,15 @@ These identities were checked in the project's Authentication console on October
 
 Firestore access is based on these approved account identities and does not additionally require email verification, preserving existing staff sign-in. The notification relay separately requires a verified email; do not remove that requirement when configuring push.
 
-The browser's `STAFF_EMAILS` in `src/data.js` controls the Manager sign-in UI and password-reset eligibility. It cannot grant database access. The relay's allowlist is in `push-relay/src/index.js`.
+The browser's `STAFF_EMAILS` in `src/data.js` controls the Manager sign-in UI and password-reset eligibility. It cannot grant database access. The relay uses the same exact UID/email pairs from `push-relay/src/staff-identities.js`. `npm test` checks that those pairs match the rules, this table, and the UI email list; relay tests exercise signed tokens for both approved and rejected identities.
 
 ## What the rules allow
 
 - Anyone may read the public flavor board at exactly `shop/live`.
 - Only the two approved UID/email pairs may create or update it.
-- Staff updates must preserve the existing required fields, eight-pan list, numeric update timestamp, and catalog limit of 500 entries.
+- Staff updates must preserve the existing required fields, eight nonempty string case IDs, numeric update timestamp, and catalog limit of 500 entries.
+- Instagram may be null (use the default card) or a map. Its image URL, caption, permalink, and handle must be strings when present; its optional update timestamp must be numeric. Empty text and missing optional fields remain valid.
+- Catalog validation remains limited to the list type and 500-entry cap. Sparse legacy entries and nullable colors remain supported; these rules do not exhaustively validate catalog elements or URL schemes. The app validates HTTPS image URLs on save and rendering.
 - Validation checks the resulting document, so partial hours, notice, catalog, Instagram, stock, swap, and undo updates remain supported. Optional `availability` and richer `lastSwap` fields remain compatible.
 - No app client, including staff, may delete the live board.
 - All other documents and subcollections are denied by default.
@@ -33,9 +35,9 @@ Google Cloud/Firebase administrators and server service accounts with IAM privil
 1. Enable Email/Password sign-in in Firebase Authentication for project `janarty-s`.
 2. Provision each approved staff account using its exact lowercase email and a strong password shared privately.
 3. Verify the account's actual UID in Authentication; never authorize a UID supplied by an untrusted client.
-4. Add an exact UID/email pair to `firestore.rules` only when a new staff member is authorized. Update the UI/relay email lists and regression tests as appropriate.
-5. Keep the web app's authorized domain configured. Verify sign-in and rules tests before deployment; do not open database writes to troubleshoot.
-6. When removing staff, remove their UID from the rules and publish, then disable their Auth account/revoke sessions and remove applicable UI/relay access. Deleting or disabling an account alone does not immediately invalidate an already issued ID token.
+4. Add the same exact UID/email pair to `firestore.rules` and `push-relay/src/staff-identities.js` only when a new staff member is authorized. Update this table, the UI's `STAFF_EMAILS`, and regression tests. Recreated accounts require this explicit approval too.
+5. Keep the web app's authorized domain configured. Run `npm test`, `npm run test:rules`, and `npm run test:relay`, then deploy the rules and relay separately. Preserve `PUSH_ENABLED=false` while sending is disabled. Do not open database writes to troubleshoot.
+6. When removing staff, remove their pair from both the rules and relay and publish both, then disable their Auth account/revoke sessions and remove the UI entry. Deleting or disabling an account alone does not immediately invalidate an already issued ID token.
 
 Favorites and alert preferences remain on the device and require no customer database writes. This change adds no Firebase service, billing upgrade, or per-request database lookup.
 

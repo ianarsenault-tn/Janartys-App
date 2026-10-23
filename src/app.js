@@ -2,6 +2,7 @@ import "./styles.css";
 import {
   FAVORITE_IDS,
   HOURS_BLURB,
+  SEED_INSTAGRAM,
   SHOP_MAPS_URL,
   SHOP_PHONE_TEL,
   STAFF_SESSION_KEY,
@@ -16,7 +17,7 @@ import {
   whenAuthReady,
 } from "./staff-auth.js";
 import { setupStaffIdleTimeout } from "./staff-idle.js";
-import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, swapKey, updateLabel } from "./presentation.js";
+import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, updateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
 import { tapFeedback } from "./feedback.js";
 import { fitFlavorNames, setupFlavorNameFitting } from "./flavor-name-fit.js";
@@ -153,6 +154,7 @@ async function applyClosingAt(hhmm) {
   const close = normalizeTime(hhmm) || "19:00";
   const o = getHoursOverride();
   const same = o && !o.closed && o.mode === "close-at" && o.close === close;
+  if (same) return;
   await staffOperation(() => setHoursOverride({
     date: chicagoDate(),
     closed: false,
@@ -161,7 +163,6 @@ async function applyClosingAt(hhmm) {
     mode: "close-at",
   }), () => {
     ui.operationMessage = "Hours saved.";
-    if (same) return;
     ui.notice = `Closing at ${formatClock(close)} tonight.`;
     ui.sheet = "notice-preview";
   });
@@ -196,7 +197,7 @@ function igCardHtml() {
   const ig = getInstagram();
   const href = safeHref(ig.permalink);
   const handle = ig.handle || "janartys";
-  const src = ig.imageUrl || "";
+  const src = safeImageSrc(ig.imageUrl) || safeImageSrc(SEED_INSTAGRAM.imageUrl);
   return `<a class="ig-card" href="${esc(href)}" target="_blank" rel="noopener noreferrer">
     <div class="ig-card-head">
       <span class="ig-avatar" aria-hidden="true"><span class="nav-mark"></span></span>
@@ -421,8 +422,8 @@ function onLogoTap() {
   }
 }
 
-function showToast(kind, html, sub = "") {
-  ui.toast = { kind, html, sub, at: Date.now() };
+function showToast(kind, title, sub = "") {
+  ui.toast = { kind, title, sub, at: Date.now() };
   render();
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => {
@@ -437,7 +438,7 @@ function onSwapSuccess(swap) {
   } else {
     showToast(
       "manager",
-      `<em>Case updated</em>`,
+      "Case updated",
       `${swap.outName} out, ${swap.inName} in`
     );
   }
@@ -447,7 +448,7 @@ function onNoticeSuccess(notice) {
   if (ui.view === "case") {
     refreshCaseInfo();
   } else {
-    showToast("manager", `<em>Shop notice posted</em>`, notice.message);
+    showToast("manager", "Shop notice posted", notice.message);
   }
 }
 
@@ -456,7 +457,7 @@ function toastHtml() {
   const t = ui.toast;
   const sub = t.sub ? `<div class="toast-sub">${esc(t.sub)}</div>` : "";
   return `<div class="toast ${t.kind}" role="status">${toastCone()}
-    <div class="toast-text">${t.html}${sub}</div>
+    <div class="toast-text"><em>${esc(t.title)}</em>${sub}</div>
   </div>`;
 }
 
@@ -1222,14 +1223,14 @@ root.addEventListener("click", async (e) => {
       if (!flavor) return;
       ui.sheet = null;
       ui.add = { name: "", note: "", dairyFree: false, color: "#A948A6" };
-      showToast("manager", `<em>${esc(flavor.name)}</em>`, "Added to the catalog — tap a pan to swap it in");
+      showToast("manager", flavor.name, "Added to the catalog — tap a pan to swap it in");
     });
     return;
   }
   if (act === "ig-reset") {
     await staffOperation(resetInstagram, () => {
       ui.ig = null;
-      showToast("manager", `<em>Instagram reset</em>`, "Default post is back on What’s Out");
+      showToast("manager", "Instagram reset", "Default post is back on What’s Out");
     });
     return;
   }
@@ -1255,7 +1256,7 @@ root.addEventListener("submit", async (e) => {
     const d = { ...ensureIgDraft() };
     await staffOperation(() => setInstagram(d), () => {
       ui.ig = null;
-      showToast("manager", `<em>Instagram updated</em>`, "What’s Out shows the new post");
+      showToast("manager", "Instagram updated", "What’s Out shows the new post");
     });
   }
   if (act === "notice-form") {
@@ -1351,7 +1352,7 @@ window.addEventListener("janartys-remote-swap", (e) => {
   } else {
     showToast(
       "manager",
-      `<em>Case updated</em>`,
+      "Case updated",
       `${swap.outName} out, ${swap.inName} in`
     );
   }
@@ -1364,7 +1365,7 @@ window.addEventListener("janartys-remote-notice", (e) => {
   if (isCustomerView()) {
     refreshCaseInfo();
   } else {
-    if (activeNotice(notice)) showToast("manager", `<em>Shop notice posted</em>`, notice.message);
+    if (activeNotice(notice)) showToast("manager", "Shop notice posted", notice.message);
   }
 });
 

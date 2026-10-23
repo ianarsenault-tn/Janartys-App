@@ -4,13 +4,11 @@ import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { deleteDoc, deleteField, doc, getDoc, runTransaction, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { swapPatch, undoPatch } from "../src/case-actions.js";
+import { STAFF_IDENTITIES } from "../push-relay/src/staff-identities.js";
 
 // Never fall back to a live project or an arbitrary remote emulator.
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, "127.0.0.1:8087", "Run npm run test:rules; a local emulator is required.");
-const staff = [
-  ["KcRs37Q7yVbLiZNuk2m0q0Rqjx72", "ian.arsenault@yahoo.com"],
-  ["7a7vnB6g64Yxnp1pXROYYOUoKzz2", "janartys@gmail.com"],
-];
+const staff = STAFF_IDENTITIES;
 const now = Date.parse("2026-10-19T15:00:00Z");
 const fixture = () => ({
   catalog: Array.from({ length: 10 }, (_, i) => ({ id: `f${i}`, name: `Flavor ${i}`, note: "House flavor", story: "House flavor", scoopColor: "#fff", color: null, dairyFree: false, tags: [] })),
@@ -125,5 +123,38 @@ test("sibling documents, subcollections, and mixed batches remain denied for all
     batch.set(doc(db, "shop/other"), { allowed: true });
     await assertFails(batch.commit());
     assert.equal((await getDoc(live(db))).data().updatedAt, now);
+  }
+});
+
+test("every case slot requires a nonempty string", async () => {
+  const db = auth(...staff[0]);
+  for (let slot = 0; slot < 8; slot++) {
+    for (const value of ["", null, 12, false, {}]) {
+      const caseIds = [...fixture().caseIds];
+      caseIds[slot] = value;
+      await assertFails(updateDoc(live(db), { caseIds }));
+    }
+  }
+});
+
+test("Instagram rejects malformed maps and wrong field types", async () => {
+  const db = auth(...staff[0]);
+  for (const instagram of ["invalid", [], 42, true]) {
+    await assertFails(updateDoc(live(db), { instagram }));
+  }
+  for (const field of ["imageUrl", "caption", "permalink", "handle"]) {
+    for (const value of [null, 42, false, [], {}]) {
+      await assertFails(updateDoc(live(db), { instagram: { ...fixture().instagram, [field]: value } }));
+    }
+  }
+  await assertFails(updateDoc(live(db), { instagram: { ...fixture().instagram, updatedAt: "invalid" } }));
+});
+
+test("narrow shape checks preserve sparse catalogs, optional Instagram fields, and partial writes", async () => {
+  const db = auth(...staff[0]);
+  for (const instagram of [null, {}, { imageUrl: "", caption: "", permalink: "", handle: "janartys" }, fixture().instagram]) {
+    await assertSucceeds(updateDoc(live(db), { instagram, catalog: [{ id: "f0", name: "Legacy flavor", color: null }] }));
+    await assertSucceeds(updateDoc(live(db), { lastNotice: { id: "notice", message: "Open", at: now } }));
+    await assertSucceeds(updateDoc(live(db), { hoursOverride: null }));
   }
 });

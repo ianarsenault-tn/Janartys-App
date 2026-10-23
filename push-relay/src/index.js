@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from "jose";
 import { validateEvent, buildMessage } from "./message.js";
+import { STAFF_IDENTITIES } from "./staff-identities.js";
 
-const staff = new Set(["ian.arsenault@yahoo.com", "janartys@gmail.com"]);
 const origins = new Set(["https://ianarsenault-tn.github.io", "capacitor://localhost", "https://localhost"]);
 // Only Google's public signing keys are cached. No request/customer state is global.
 const keys = createRemoteJWKSet(new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"));
@@ -11,7 +11,7 @@ export async function verifyStaff(request, project) {
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Unauthorized");
   const { payload } = await jwtVerify(authorization.slice(7), keys, { algorithms: ["RS256"], issuer: `https://securetoken.google.com/${project}`, audience: project });
-  if (!payload.sub || !staff.has(String(payload.email)) || payload.email_verified !== true) throw new Error("Unauthorized");
+  if (!payload.sub || !STAFF_IDENTITIES.some(([uid, email]) => payload.sub === uid && payload.email === email) || payload.email_verified !== true) throw new Error("Unauthorized");
   return payload.sub;
 }
 
