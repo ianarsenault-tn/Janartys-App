@@ -1,5 +1,4 @@
-import { STAFF_SESSION_KEY } from "./data.js";
-import { isStaffSignedIn, signOutStaff } from "./staff-auth.js";
+import { isStaffSignedIn } from "./staff-auth.js";
 
 /** Manager idle sign-out after this many ms with no interaction. */
 export const STAFF_IDLE_MS = 15 * 60 * 1000;
@@ -15,7 +14,8 @@ const ACTIVITY_EVENTS = [
 
 /**
  * Arms a 15-minute idle timer while Manager is open and staff are signed in.
- * Any pointer/key/input activity resets the timer. On fire: signOut + callback.
+ * Any pointer/key/input activity resets the timer. The callback owns sign-out
+ * and navigation, so manual logout and idle logout use the same path.
  *
  * @param {{
  *   isManagerActive: () => boolean,
@@ -44,18 +44,12 @@ export function setupStaffIdleTimeout({ isManagerActive, onTimeout }) {
       void (async () => {
         if (!isManagerActive() || !isStaffSignedIn()) return;
         clearTimer();
-        wasActive = false;
         try {
-          await signOutStaff();
-        } catch {
-          /* still clear local session */
+          await onTimeout();
+        } finally {
+          // If sign-out failed, retry after another idle period, not every second.
+          arm();
         }
-        try {
-          sessionStorage.removeItem(STAFF_SESSION_KEY);
-        } catch {
-          /* private mode */
-        }
-        await onTimeout();
       })();
     }, STAFF_IDLE_MS);
   }

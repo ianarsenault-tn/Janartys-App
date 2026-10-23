@@ -1,7 +1,6 @@
 import {
   doc,
   onSnapshot,
-  setDoc,
   runTransaction,
   updateDoc,
 } from "firebase/firestore";
@@ -69,22 +68,16 @@ function mergeSeedCatalog(catalog) {
 }
 
 function hydrateFlavor(f) {
-  const seed = SEED_CATALOG.find((s) => s.id === f.id);
-  if (!seed) {
-    return {
-      ...f,
-      story: f.story || f.note || "A house flavor.",
-      tags: Array.isArray(f.tags) ? f.tags : [],
-    };
-  }
+  const seed = SEED_CATALOG.find((s) => s.id === f.id) || {};
+  const text = (value, fallback) => typeof value === "string" ? value : fallback;
   return {
     ...f,
-    name: seed.name,
-    note: seed.note,
-    story: seed.story,
-    scoopColor: f.scoopColor || seed.scoopColor,
-    dairyFree: seed.dairyFree,
-    tags: Array.isArray(seed.tags) ? [...seed.tags] : [],
+    name: text(f.name, seed.name || "House flavor"),
+    note: text(f.note, seed.note || ""),
+    story: text(f.story, seed.story ?? text(f.note, "A house flavor.")),
+    scoopColor: text(f.scoopColor, seed.scoopColor || ""),
+    dairyFree: typeof f.dairyFree === "boolean" ? f.dairyFree : Boolean(seed.dairyFree),
+    tags: Array.isArray(f.tags) ? [...f.tags] : [...(seed.tags || [])],
   };
 }
 
@@ -142,28 +135,6 @@ function emit() {
   for (const fn of listeners) fn(state);
 }
 
-function livePayload() {
-  return {
-    catalog: state.catalog.map((f) => ({
-      id: f.id,
-      name: f.name,
-      note: f.note || "",
-      story: f.story || f.note || "",
-      scoopColor: f.scoopColor || "",
-      dairyFree: Boolean(f.dairyFree),
-      color: f.color || null,
-      tags: Array.isArray(f.tags) ? f.tags : [],
-    })),
-    caseIds: [...state.caseIds],
-    updatedAt: state.updatedAt || Date.now(),
-    lastSwap: state.lastSwap || null,
-    lastNotice: state.lastNotice || null,
-    hoursOverride: state.hoursOverride || null,
-    instagram: cloneInstagram(state.instagram),
-    availability: state.availability || {},
-  };
-}
-
 function applyRemote(data) {
   if (!data || !Array.isArray(data.catalog) || !Array.isArray(data.caseIds)) {
     return false;
@@ -199,25 +170,6 @@ function applyRemote(data) {
   return true;
 }
 
-async function pushLive(patch = livePayload()) {
-  try {
-    await setDoc(LIVE_REF, patch, { merge: true });
-    if (syncStatus.writeError) {
-      syncStatus.writeError = null;
-      emit();
-    }
-  } catch (err) {
-    syncStatus.writeError = err;
-    emit();
-  }
-}
-
-function persistLocalAndPush(patch) {
-  persist();
-  emit();
-  pushLive(patch);
-}
-
 function startLiveSync() {
   try {
     if (typeof window !== "undefined" && window.__janartysLiveUnsub) {
@@ -233,7 +185,10 @@ function startLiveSync() {
           if (wasLive !== syncStatus.live) emit();
           return;
         }
-        applyRemote(snap.data());
+        // Pending snapshots are local echoes, not confirmed shop state. Keeping
+        // the last confirmed view avoids caching failed writes or rolling back
+        // over a newer remote edit when a save is rejected.
+        if (!snap.metadata.hasPendingWrites) applyRemote(snap.data());
         if (wasLive !== syncStatus.live) emit();
       },
       () => {
@@ -276,30 +231,25 @@ export function getInstagram() {
   return state.instagram || cloneInstagram(SEED_INSTAGRAM);
 }
 
-export function setInstagram({ imageUrl, caption, permalink }) {
-  const prev = getInstagram();
+export async function setInstagram({ imageUrl, caption, permalink }) {
   const nextUrl = String(imageUrl ?? "").trim();
   const nextCap = String(caption ?? "").trim();
   const nextLink = String(permalink ?? "").trim();
-  state = {
-    ...state,
+  await changeLive(current => ({
     instagram: {
       imageUrl: nextUrl || SEED_INSTAGRAM.imageUrl,
       caption: nextCap,
       permalink: nextLink || SEED_INSTAGRAM.permalink,
-      handle: prev.handle || SEED_INSTAGRAM.handle,
+      handle: current.instagram?.handle || SEED_INSTAGRAM.handle,
       updatedAt: Date.now(),
     },
-  };
-  persistLocalAndPush({ instagram: state.instagram });
+  }));
 }
 
-export function resetInstagram() {
-  state = {
-    ...state,
+export async function resetInstagram() {
+  await changeLive(() => ({
     instagram: cloneInstagram({ ...SEED_INSTAGRAM, updatedAt: Date.now() }),
-  };
-  persistLocalAndPush({ instagram: state.instagram });
+  }));
 }
 
 export function chicagoNow(date = new Date()) {
@@ -447,35 +397,37 @@ export function getShopStatus(nowDate = new Date()) {
   };
 }
 
-export function setHoursOverride(override) {
-  state = {
-    ...state,
-    hoursOverride: override,
-  };
-  persistLocalAndPush({ hoursOverride: state.hoursOverride });
+export async function setHoursOverride(override) {
+  const hoursOverride = override ? { ...override } : null;
+  await changeLive(() => ({ hoursOverride }));
 }
 
-export function clearHoursOverride() {
-  state = {
-    ...state,
-    hoursOverride: null,
-  };
-  persistLocalAndPush({ hoursOverride: null });
+export async function clearHoursOverride() {
+  await setHoursOverride(null);
 }
 
 async function changeLive(makePatch) {
-  const patch = await runTransaction(db, async transaction => {
-    const snapshot = await transaction.get(LIVE_REF);
-    if (!snapshot.exists()) throw new Error("The live case is unavailable. Please reconnect and try again.");
-    const patch = makePatch(snapshot.data());
-    transaction.update(LIVE_REF, patch);
+  try {
+    const patch = await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(LIVE_REF);
+      if (!snapshot.exists()) throw new Error("The live case is unavailable. Please reconnect and try again.");
+      const patch = makePatch(snapshot.data());
+      transaction.update(LIVE_REF, patch);
+      return patch;
+    });
+    // Commit locally only after acknowledgement; failures leave confirmed state
+    // intact. Transactions also avoid queued offline writes and stale catalog saves.
+    state = { ...state, ...patch };
+    if (patch.catalog) state.catalog = mergeSeedCatalog(patch.catalog.map(hydrateFlavor)).catalog;
+    syncStatus.writeError = null;
+    persist();
+    emit();
     return patch;
-  });
-  state = { ...state, ...patch };
-  syncStatus.writeError = null;
-  persist();
-  emit();
-  return patch;
+  } catch (error) {
+    syncStatus.writeError = error;
+    emit();
+    throw error;
+  }
 }
 
 export async function swapPan(slot, inId, expectedOutId = state.caseIds[slot]) {
@@ -514,7 +466,7 @@ export async function sendNotice(message) {
   return notice;
 }
 
-function slugify(name) {
+function slugify(name, catalog) {
   const base =
     name
       .toLowerCase()
@@ -524,7 +476,7 @@ function slugify(name) {
       .slice(0, 40) || "flavor";
   let id = base;
   let n = 2;
-  const ids = new Set(state.catalog.map((f) => f.id));
+  const ids = new Set(catalog.map((f) => f.id));
   while (ids.has(id)) {
     id = `${base}-${n++}`;
   }
@@ -553,12 +505,11 @@ export function scoopFromHex(hex) {
   return `radial-gradient(circle at 35% 30%, ${lightenHex(deep)}, ${deep})`;
 }
 
-export function addFlavor({ name, note, dairyFree, color }) {
+export async function addFlavor({ name, note, dairyFree, color }) {
   const trimmed = (name || "").trim();
   if (!trimmed) return null;
   const blurb = (note || "").trim() || "A new house flavor.";
   const flavor = {
-    id: slugify(trimmed),
     name: trimmed,
     note: blurb,
     story: blurb,
@@ -567,13 +518,15 @@ export function addFlavor({ name, note, dairyFree, color }) {
     color: color || "#A948A6",
     tags: [],
   };
-  state = {
-    ...state,
-    catalog: [...state.catalog, flavor].sort(byFlavorName),
-    updatedAt: Date.now(),
-  };
-  persistLocalAndPush({ catalog: state.catalog, updatedAt: state.updatedAt });
-  return flavor;
+  let added;
+  await changeLive(current => {
+    if (current.catalog.length >= 500) throw new Error("The catalog is full (500 flavors). A flavor must be removed before adding another.");
+    added = { ...flavor, id: slugify(trimmed, current.catalog) };
+    // Append to the transaction's remote catalog, preserving other staff edits
+    // and recalculating the ID if Firestore retries after a concurrent addition.
+    return { catalog: [...current.catalog, added], updatedAt: Date.now() };
+  });
+  return added;
 }
 
 function byFlavorName(a, b) {

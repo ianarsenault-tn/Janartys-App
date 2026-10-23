@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
-    "test": "node --test test/smoke.test.js test/presentation.test.js test/customer.test.js",
+    "test": "node --test test/smoke.test.js test/presentation.test.js test/customer.test.js && npm run test:manager",
+    "test:manager": "node --experimental-vm-modules --test test/manager.test.js",
     "test:relay": "npm --prefix push-relay test",
     "test:rules": "firebase emulators:exec --only firestore --project demo-janartys-rules \"node --test test/firestore-rules.test.js\"",
     "ios:enable-push": "node scripts/enable-ios-push.mjs"
