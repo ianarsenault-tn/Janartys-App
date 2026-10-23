@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { STAFF_IDENTITIES } from "../push-relay/src/staff-identities.js";
 
 // Dynamic import compiled-ish data + staff-auth helpers via rewriting exports is awkward
 // under plain node without a bundler. Test pure logic extracted here + file invariants.
@@ -37,6 +38,17 @@ test("staff allowlist rejects non-staff emails", async () => {
   const allow = new Set(mod.STAFF_EMAILS.map((e) => e.trim().toLowerCase()));
   assert.equal(allow.has("ian.arsenault@yahoo.com"), true);
   assert.equal(allow.has("random@example.com"), false);
+});
+
+test("relay, Firestore rules, staff documentation, and UI identities stay aligned", async () => {
+  const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
+  const pairs = [...rules.matchAll(/request\.auth\.uid == "([^"]+)"\s*&& request\.auth\.token\.email == "([^"]+)"/g)].map(match => [match[1], match[2]]);
+  assert.deepEqual(pairs, STAFF_IDENTITIES);
+  const docs = readFileSync(new URL("../FIRESTORE.md", import.meta.url), "utf8");
+  const documented = [...docs.matchAll(/\| `([^`]+@[^`]+)` \| `([^`]+)` \|/g)].map(match => [match[2], match[1]]);
+  assert.deepEqual(documented, STAFF_IDENTITIES);
+  const { STAFF_EMAILS } = await import("../src/data.js");
+  assert.deepEqual(STAFF_EMAILS, STAFF_IDENTITIES.map(([, email]) => email));
 });
 
 test("live payload shape matches Firestore rules expectations", () => {

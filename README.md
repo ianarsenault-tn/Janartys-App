@@ -95,8 +95,8 @@ The **Add flavor** form accepts a name, short note, scoop color, and dairy-free 
 | **Follow normal hours** | Removes today’s override and returns to the configured weekly schedule. |
 | **Closed today** | Marks the shop closed for the current shop date. |
 | **Open today** | Uses an 11:30am–9pm window for the current shop date. |
-| **Closing at** | Saves the selected closing time for today and opens a suggested notice for preview. The hours change is separate from posting that notice. |
-| **Instagram** | Saves an image URL, caption, and post/profile link, or resets the card to its default content. |
+| **Closing at** | Saves a changed closing time for today and opens a suggested notice for preview. Re-selecting the saved time does not write again. The hours change is separate from posting that notice. |
+| **Instagram** | Saves an HTTPS image URL, caption, and post/profile link, or resets the card to its default content. Invalid image URLs retain the draft and show an error; a blank image URL uses the default photo. |
 
 Hours overrides apply only to their stored shop date. The Instagram card is maintained manually; it does not automatically fetch the latest Instagram post.
 
@@ -180,7 +180,7 @@ Firebase project `janarty-s`, Firestore document `shop/live`, is the shared sour
 
 Clients listen to this existing document for updates. Customer launches never create or backfill Firestore documents. Library search, filters, favorites, and alert choices reuse the loaded catalog rather than adding database queries.
 
-Swaps, undo, availability, hours, Instagram save/reset, and Add flavor use server transactions; notice posting waits for a successful server update. Manager retains drafts and displays pending/error feedback until confirmation. Success messages and the suggested closing-time notice appear only after acknowledgement. Failed saves keep the last confirmed shop state; pending local Firestore snapshots are not cached as confirmed data. A prolonged wait is shown as pending, not treated as a canceled write.
+Swaps, undo, availability, hours, Instagram save/reset, Add flavor, and notices use server transactions. They fail offline instead of queuing writes for later. Manager retains drafts and displays pending/error feedback until confirmation. Success messages, notice push attempts, and the suggested closing-time notice appear only after acknowledgement. Failed saves keep the last confirmed shop state; pending local Firestore snapshots are not cached as confirmed data. A prolonged wait is shown as pending, not treated as a canceled write.
 
 Add flavor appends to the current server catalog, including on transaction retries, preserving other staff edits and avoiding ID collisions. Catalog fields received from Firestore take precedence over bundled seed values, including intentionally empty descriptions/tags and a false dairy-free flag. The seed only fills missing fields and missing `SEED_CASE` entries; it is not written back during loading.
 

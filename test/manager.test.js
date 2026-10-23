@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SEED_CATALOG, SEED_CASE, STAFF_SESSION_KEY, STORAGE_KEY } from "../src/data.js";
+import { SEED_CATALOG, SEED_CASE, SEED_INSTAGRAM, STAFF_SESSION_KEY, STORAGE_KEY } from "../src/data.js";
 import { copy, deferred, failure, fixture, managerHarness, settle } from "./helpers/manager-harness.js";
 
 for (const reason of ["manual", "idle"]) {
@@ -55,6 +55,7 @@ const saves = [
   ["Instagram", h => h.store.setInstagram({ imageUrl: "https://example.com/post.jpg", caption: "New", permalink: "https://instagram.com/p/example" }), "instagram"],
   ["Instagram reset", h => h.store.resetInstagram(), "instagram"],
   ["Add flavor", h => h.store.addFlavor({ name: "Test flavor", note: "A note", dairyFree: true, color: "#112233" }), "catalog"],
+  ["notice", h => h.store.sendNotice("Closing at 7 tonight"), "lastNotice"],
 ];
 for (const [name, save, field] of saves) {
   test(`${name} waits for acknowledgement and rejects without replacing newer confirmed state`, async () => {
@@ -111,7 +112,95 @@ for (const [code, message] of [
     assert.doesNotMatch(h.root.innerHTML, /Added to the catalog/);
     assert.equal(h.backend.writes.length, 0);
   });
+  test(`notice retains its preview and shows ${code} without publishing`, async () => {
+    const h = await managerHarness();
+    await h.input("notice-msg", "Keep this notice");
+    await h.submit("notice-form");
+    h.backend.error = failure(code);
+    await h.click("confirm-notice");
+    const sheet = h.root.innerHTML.slice(h.root.innerHTML.indexOf('<aside class="sheet'));
+    assert.match(sheet, /Keep this notice/);
+    assert.match(sheet, message);
+    assert.doesNotMatch(h.root.innerHTML, /<em>Shop notice posted<\/em>/);
+    assert.equal(h.store.getState().lastNotice, null);
+    assert.equal(h.backend.writes.length, 0);
+    assert.equal(h.backend.published.length, 0);
+  });
 }
+
+test("pending notice ignores local echoes, blocks repeats, and publishes only after acknowledgement", async () => {
+  const h = await managerHarness();
+  await h.input("notice-msg", "Pending notice");
+  await h.submit("notice-form");
+  h.backend.gate = deferred();
+  const pending = h.click("confirm-notice");
+  await settle();
+  h.emitSnapshot({ ...h.backend.remote, ...h.backend.attempts[0] }, { hasPendingWrites: true });
+  assert.equal(h.store.getState().lastNotice, null);
+  assert.equal(JSON.parse(h.localStorage.getItem(STORAGE_KEY)).lastNotice, null);
+  assert.match(h.root.innerHTML, /Waiting for server confirmation/);
+  assert.match(h.root.innerHTML, /data-act="confirm-notice" disabled/);
+  assert.doesNotMatch(h.root.innerHTML, /<em>Shop notice posted<\/em>/);
+  assert.equal(h.backend.published.length, 0);
+  await h.click("confirm-notice");
+  await h.click("close-sheet");
+  assert.equal(h.backend.attempts.length, 1);
+  h.backend.gate.resolve();
+  await pending;
+  assert.equal(h.backend.writes.length, 1);
+  assert.equal(h.backend.published.length, 1);
+  assert.equal(h.backend.published[0].message, "Pending notice");
+  assert.doesNotMatch(h.root.innerHTML, /aria-label="Preview shop notice"/);
+  assert.match(h.root.innerHTML, /Saved. Push is not enabled/);
+});
+
+test("Instagram rejects invalid image drafts without saving and preserves blank/default behavior", async () => {
+  const h = await managerHarness();
+  for (const value of ["javascript:alert(1)", "data:image/png;base64,AA==", "http://example.com/photo.jpg", "/photo.jpg", "not a URL"]) {
+    await h.input("ig-image", value);
+    await h.submit("ig-form");
+    assert.match(h.root.innerHTML, /Enter a valid HTTPS image URL/);
+    assert.ok(h.root.innerHTML.includes(value));
+    assert.equal(h.backend.attempts.length, 0);
+    assert.doesNotMatch(h.root.innerHTML, /<em>Instagram updated<\/em>/);
+  }
+  await h.input("ig-image", " https://example.com/photo.jpg ");
+  await h.submit("ig-form");
+  assert.equal(h.store.getInstagram().imageUrl, "https://example.com/photo.jpg");
+  await h.input("ig-image", " ");
+  await h.submit("ig-form");
+  assert.equal(h.store.getInstagram().imageUrl, SEED_INSTAGRAM.imageUrl);
+});
+
+test("unsafe stored Instagram image URLs render the default photo", async () => {
+  const remote = fixture();
+  remote.instagram.imageUrl = "data:image/svg+xml,bad";
+  const h = await managerHarness({ remote });
+  await h.click("go-case");
+  assert.doesNotMatch(h.root.innerHTML, /src="data:/);
+  assert.ok(h.root.innerHTML.includes(SEED_INSTAGRAM.imageUrl));
+});
+
+test("toast titles and notice subtitles render dynamic text without HTML interpretation", async () => {
+  const h = await managerHarness();
+  await h.click("open-add");
+  await h.input("add-name", '<img src=x onerror="bad()"> & Rose');
+  await h.click("do-add");
+  assert.match(h.root.innerHTML, /<em>&lt;img src=x onerror=&quot;bad\(\)&quot;&gt; &amp; Rose<\/em>/);
+  assert.doesNotMatch(h.root.innerHTML, /<img src=x/);
+  h.window.dispatchEvent({ type: "janartys-remote-notice", detail: { at: Date.now(), message: "<b>Notice</b> & update" } });
+  assert.match(h.root.innerHTML, /toast-sub">&lt;b&gt;Notice&lt;\/b&gt; &amp; update/);
+});
+
+test("unchanged closing times do not write or open another notice", async () => {
+  const h = await managerHarness();
+  await h.change("hours-close-at", "18:30");
+  assert.equal(h.backend.writes.length, 1);
+  await h.click("close-sheet");
+  await h.change("hours-close-at", "18:30");
+  assert.equal(h.backend.writes.length, 1);
+  assert.doesNotMatch(h.root.innerHTML, /aria-label="Preview shop notice"/);
+});
 
 test("pending Add flavor prevents duplicate submissions and only toasts after ack", async () => {
   const h = await managerHarness();

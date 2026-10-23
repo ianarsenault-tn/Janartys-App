@@ -59,7 +59,7 @@ export async function managerHarness({ remote = fixture(), cache, signedIn = tru
   const schedule = (fn, ms, interval = false) => { timers.set(++timerId, { fn, ms, interval }); return timerId; };
   const backend = {
     remote: copy(remote), writes: [], attempts: [], gate: null, error: null, retryWith: null,
-    signedIn, signOutError: null, signOutCalls: 0,
+    signedIn, signOutError: null, signOutCalls: 0, published: [],
   };
   function emitSnapshot(data = backend.remote, metadata = {}) {
     snapshot?.({ exists: () => Boolean(data), data: () => copy(data), metadata: { fromCache: false, hasPendingWrites: false, ...metadata } });
@@ -118,7 +118,8 @@ export async function managerHarness({ remote = fixture(), cache, signedIn = tru
     "flavor-name-fit.js": { fitFlavorNames: noop, setupFlavorNameFitting: noop },
     "notifications.js": {
       enableNotifications: noop, disableNotifications: noop, initializeNotifications: async () => {},
-      notificationStatus: () => ({}), subscribeNotifications: noop, publishShopEvent: async () => "Saved. Push is not enabled.",
+      notificationStatus: () => ({}), subscribeNotifications: noop,
+      publishShopEvent: async event => { backend.published.push(copy(event)); return "Saved. Push is not enabled."; },
     },
   };
   const context = createContext({

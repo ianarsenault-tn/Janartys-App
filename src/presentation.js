@@ -2,6 +2,16 @@ import { SHOP_TZ } from "./data.js";
 
 export const JUST_OUT_MS = 30 * 60 * 1000;
 
+export function safeImageSrc(value) {
+  if (typeof value !== "string" || !/^https:\/\//i.test(value.trim())) return "";
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function timestamp(value) {
   if (value == null || value === "") return NaN;
   const at = typeof value === "number" ? value : Date.parse(value);

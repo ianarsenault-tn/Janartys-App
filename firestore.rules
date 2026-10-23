@@ -3,6 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Authorize the existing accounts, not anyone claiming a staff email.
     // Recreated accounts receive new UIDs and require explicit approval here.
+    // Keep pairs aligned with push-relay/src/staff-identities.js; npm test checks parity.
     function isStaff() {
       return request.auth != null && (
         (request.auth.uid == "KcRs37Q7yVbLiZNuk2m0q0Rqjx72"
@@ -12,7 +13,23 @@ service cloud.firestore {
       );
     }
 
+    function isCaseId(id) {
+      return id is string && id.size() > 0;
+    }
+
+    function isInstagram(ig) {
+      // Null uses the default card. Older maps can omit text/timestamp fields.
+      return ig == null || (ig is map
+        && ig.get("imageUrl", "") is string
+        && ig.get("caption", "") is string
+        && ig.get("permalink", "") is string
+        && ig.get("handle", "") is string
+        && ig.get("updatedAt", 0) is number);
+    }
+
     // Validate the resulting document, including after partial staff updates.
+    // Catalog entries stay compatible with sparse legacy records. Rules have no
+    // generic list-element validator; do not claim exhaustive catalog validation.
     function isLiveShape() {
       let d = request.resource.data;
       return d.keys().hasAll([
@@ -22,6 +39,11 @@ service cloud.firestore {
         && d.catalog is list
         && d.caseIds is list
         && d.caseIds.size() == 8
+        && isCaseId(d.caseIds[0]) && isCaseId(d.caseIds[1])
+        && isCaseId(d.caseIds[2]) && isCaseId(d.caseIds[3])
+        && isCaseId(d.caseIds[4]) && isCaseId(d.caseIds[5])
+        && isCaseId(d.caseIds[6]) && isCaseId(d.caseIds[7])
+        && isInstagram(d.instagram)
         && d.updatedAt is number
         && d.catalog.size() <= 500;
     }
