@@ -104,7 +104,7 @@ Hours overrides apply only to their stored shop date. The Instagram card is main
 
 - Sign-in includes readable errors, a password-reset action for allowlisted staff, and a local cooldown after repeated failed attempts.
 - Firebase Auth may persist a signed-in session across reloads. Closing a tab alone does not guarantee sign-out.
-- Explicit **Log out** ends the session. Manager also signs staff out after 15 minutes of inactivity while Manager is open.
+- Explicit **Log out** ends the session. Manager also signs staff out after 15 minutes of inactivity while Manager is open. Both return to Manager unlock with a signed-out message; failed sign-out reports that the session is still open.
 - Firestore rules restrict writes to the approved Firebase account IDs and their matching staff emails. A hidden Manager entry point and client-side allowlist cannot grant database access. See [FIRESTORE.md](FIRESTORE.md).
 
 ## Design, interaction, and accessibility
@@ -180,7 +180,9 @@ Firebase project `janarty-s`, Firestore document `shop/live`, is the shared sour
 
 Clients listen to this existing document for updates. Customer launches never create or backfill Firestore documents. Library search, filters, favorites, and alert choices reuse the loaded catalog rather than adding database queries.
 
-Swaps, undo, and availability changes use server transactions; notice posting waits for a successful server update. Other Manager forms update locally while saving and expose a server warning if the write fails.
+Swaps, undo, availability, hours, Instagram save/reset, and Add flavor use server transactions; notice posting waits for a successful server update. Manager retains drafts and displays pending/error feedback until confirmation. Success messages and the suggested closing-time notice appear only after acknowledgement. Failed saves keep the last confirmed shop state; pending local Firestore snapshots are not cached as confirmed data. A prolonged wait is shown as pending, not treated as a canceled write.
+
+Add flavor appends to the current server catalog, including on transaction retries, preserving other staff edits and avoiding ID collisions. Catalog fields received from Firestore take precedence over bundled seed values, including intentionally empty descriptions/tags and a false dairy-free flag. The seed only fills missing fields and missing `SEED_CASE` entries; it is not written back during loading.
 
 ### Device storage and offline behavior
 
@@ -254,7 +256,7 @@ npm run test:relay
 npm run build
 ```
 
-- App tests cover the app/data structure, staff allowlist, catalog behavior, display timestamps, notice expiry, favorites/filtering/topic consent, stale-swap protection, undo, and availability expiry.
+- App tests cover the app/data structure, staff allowlist, catalog behavior, display timestamps, notice expiry, favorites/filtering/topic consent, stale-swap protection, undo, and availability expiry. `npm test` also runs `test:manager`: the actual Manager/store modules with mocked Firebase, browser layout APIs, and timers, covering logout destinations/messages, rejected and pending saves, draft retention, concurrent catalog additions, and remote seed-field precedence. This uses Node's experimental VM modules flag and never connects to the live Firebase project.
 - Firestore rules tests use a local emulator and require Java 21+. They check exact staff UID/email authorization, public read-only access, legitimate staff edits/transactions, and rejected deletion, invalid data, and unrelated document access. They never write to the live Firebase project.
 - Relay checks generate Worker types and run TypeScript validation. Relay tests cover message construction, invalid authorization/origins, duplicate prevention, failed-send handling, payload limits, and the daily send cap.
 - The September 2026 feature release also received local browser checks for the full 152-flavor catalog across 14 phone-sized portrait/landscape viewports, favorites persistence, notification choices/deep links, and staff workflows using mocked saves. These were release checks, not an automated Xcode/device test suite.

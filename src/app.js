@@ -66,6 +66,7 @@ let caseIntroduced = false;
 let readyAnnounced = false;
 let renderedData = "";
 let renderedDay = "";
+let staffSession = 0;
 let seenSwap = "";
 try { seenSwap = sessionStorage.getItem("janartys-seen-swap") || ""; } catch { /* storage is optional */ }
 
@@ -96,7 +97,9 @@ const ui = {
   email: "",
   password: "",
   staffError: "",
+  staffMessage: "",
   staffBusy: false,
+  signOutBusy: false,
   toast: null, // { kind, html, sub }
   add: { name: "", note: "", dairyFree: false, color: "#A948A6" },
   ig: null, // { imageUrl, caption, permalink } draft in Manager
@@ -146,21 +149,22 @@ function normalizeTime(value) {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
-function applyClosingAt(hhmm) {
+async function applyClosingAt(hhmm) {
   const close = normalizeTime(hhmm) || "19:00";
   const o = getHoursOverride();
   const same = o && !o.closed && o.mode === "close-at" && o.close === close;
-  setHoursOverride({
+  await staffOperation(() => setHoursOverride({
     date: chicagoDate(),
     closed: false,
     open: "11:30",
     close,
     mode: "close-at",
+  }), () => {
+    ui.operationMessage = "Hours saved.";
+    if (same) return;
+    ui.notice = `Closing at ${formatClock(close)} tonight.`;
+    ui.sheet = "notice-preview";
   });
-  if (same) return;
-  ui.notice = `Closing at ${formatClock(close)} tonight.`;
-  ui.sheet = "notice-preview";
-  render();
 }
 
 function safeHref(url) {
@@ -238,12 +242,12 @@ function isStaffRoute() {
 }
 
 function isStaffUnlocked() {
-  if (!isStaffSignedIn()) {
-    sessionStorage.removeItem(STAFF_SESSION_KEY);
-    return false;
-  }
-  sessionStorage.setItem(STAFF_SESSION_KEY, "ok");
-  return true;
+  const unlocked = isStaffSignedIn();
+  try {
+    if (unlocked) sessionStorage.setItem(STAFF_SESSION_KEY, "ok");
+    else sessionStorage.removeItem(STAFF_SESSION_KEY);
+  } catch { /* Firebase Auth, not optional storage, determines the session. */ }
+  return unlocked;
 }
 
 function lockUntil() {
@@ -289,6 +293,7 @@ function clearFails() {
 }
 
 function dismissSheet() {
+  if (ui.operationBusy && ui.view === "manager") return;
   const sheet = root.querySelector(".sheet");
   const veil = root.querySelector(".veil");
   const finish = () => {
@@ -331,6 +336,7 @@ function goCase() {
   ui.email = "";
   ui.password = "";
   ui.staffError = "";
+  ui.staffMessage = "";
   history.replaceState(null, "", "#/");
   render();
 }
@@ -353,8 +359,9 @@ function routeCustomer() {
   } else goCustomer(route);
 }
 
-function goStaff() {
+function goStaff(message = "") {
   ui.storyId = null;
+  ui.staffMessage = message;
   if (!isStaffUnlocked()) {
     ui.view = "login";
     ui.password = "";
@@ -372,6 +379,34 @@ function goStaff() {
     requestAnimationFrame(() => {
       root.querySelector("[data-act=staff-email]")?.focus();
     });
+  }
+}
+
+async function signOutToUnlock(message) {
+  if (ui.signOutBusy) return;
+  ui.signOutBusy = true;
+  render();
+  try {
+    await signOutStaff();
+    staffSession++;
+    try { sessionStorage.removeItem(STAFF_SESSION_KEY); } catch { /* optional cache */ }
+    ui.email = "";
+    ui.password = "";
+    ui.sheet = null;
+    ui.selectedPan = null;
+    ui.selectedPanId = null;
+    ui.pickId = null;
+    ui.toast = null;
+    ui.operationMessage = "";
+    ui.ig = null;
+    ui.add = { name: "", note: "", dairyFree: false, color: "#A948A6" };
+    ui.notice = "";
+    goStaff(message);
+  } catch {
+    ui.operationMessage = "Couldn’t sign out. Your session is still open. Try Log out again.";
+  } finally {
+    ui.signOutBusy = false;
+    render();
   }
 }
 
@@ -622,6 +657,7 @@ function renderLogin() {
           autocomplete="current-password" data-act="staff-pass"
           placeholder="Password" value="${esc(ui.password)}" ${disabled} />
         <div class="staff-error">${esc(err)}</div>
+        ${ui.staffMessage ? `<p class="staff-sub" role="status">${esc(ui.staffMessage)}</p>` : ""}
         <button class="primary-btn staff-go" type="submit" data-act="staff-submit" ${disabled}>
           Unlock
         </button>
@@ -731,7 +767,8 @@ function renderAddSheet() {
         </label>
       </form>
       <div class="sheet-footer">
-        <button class="primary-btn" type="button" data-act="do-add" ${a.name.trim() ? "" : "disabled"}>Add to catalog</button>
+        ${ui.operationMessage ? `<p class="staff-message" role="status">${esc(ui.operationMessage)}</p>` : ""}
+        <button class="primary-btn" type="button" data-act="do-add" ${a.name.trim() && !ui.operationBusy ? "" : "disabled"}>${ui.operationBusy ? "Saving…" : "Add to catalog"}</button>
         <div class="swap-sub">Then swap it into a pan</div>
       </div>
     </aside>
@@ -770,7 +807,7 @@ function renderManager() {
         <button class="nav-case" type="button" data-act="go-case">Case</button>
       </header>
       <p class="hint">Tap a pan to swap it. New flavors get a Just out badge.</p>
-      ${getSyncStatus().writeError ? `<p class="sync-warn">Couldn’t reach the case server.</p>` : ""}
+      ${getSyncStatus().writeError && !ui.operationBusy ? `<p class="sync-warn">${esc(staffWriteErrorMessage(getSyncStatus().writeError))}</p>` : ""}
       <div class="pans">${pans}</div>
       <div class="mgr-actions">
         <button class="ghost-btn" type="button" data-act="open-add">Add flavor</button>
@@ -832,7 +869,7 @@ function renderManager() {
         </form>
       </section>
       <div class="mgr-logout">
-        <button class="ghost-btn mgr-logout-btn" type="button" data-act="staff-logout">Log out</button>
+        <button class="ghost-btn mgr-logout-btn" type="button" data-act="staff-logout" ${ui.signOutBusy ? "disabled" : ""}>${ui.signOutBusy ? "Signing out…" : "Log out"}</button>
       </div>
     </div>
     ${sheet}
@@ -867,6 +904,12 @@ function render() {
   } else if (isCustomerView()) renderCustomerCollection();
   else if (ui.view === "login") renderLogin();
   else renderManager();
+
+  if (ui.view === "manager" && (ui.operationBusy || ui.signOutBusy)) {
+    root.querySelectorAll("input, textarea, button").forEach(control => {
+      if (control.dataset.act !== "staff-logout") control.disabled = true;
+    });
+  }
 
   fitFlavorNames(root);
 
@@ -923,6 +966,7 @@ async function requestStaffReset() {
   }
   ui.staffBusy = true;
   ui.staffError = "";
+  ui.staffMessage = "";
   render();
   try {
     await resetStaffPassword(ui.email);
@@ -940,6 +984,7 @@ async function requestStaffReset() {
 
 async function submitPassword() {
   if (ui.staffBusy) return;
+  ui.staffMessage = "";
   if (isLocked()) {
     ui.staffError = "Too many tries. Pause for a couple of minutes.";
     render();
@@ -976,12 +1021,45 @@ async function submitPassword() {
   }
 }
 
-async function staffOperation(action) {
-  if (ui.operationBusy || !isStaffSignedIn()) return;
-  ui.operationBusy = true; ui.operationMessage = ""; render();
-  try { await action(); }
-  catch (error) { ui.operationMessage = error.code ? "Couldn’t save this change. Reconnect and try again." : error.message || "Couldn’t save this change."; }
-  finally { ui.operationBusy = false; render(); }
+function staffWriteErrorMessage(error) {
+  const code = (error?.code || "").replace(/^firestore\//, "");
+  if (code === "permission-denied") return "This account isn’t permitted to save this change. Ask the shop administrator to check staff access and Firestore rules.";
+  if (code === "unauthenticated") return "Your staff session expired. Log out and unlock Manager again.";
+  if (["unavailable", "deadline-exceeded"].includes(code)) return "Couldn’t confirm the save. Check your connection and try again.";
+  if (code === "aborted") return "The shop changed while saving. Review the current information and try again.";
+  if (["invalid-argument", "failed-precondition"].includes(code)) return "This change couldn’t be saved. Check the entered values; if it continues, ask the shop administrator to check the database setup.";
+  if (code === "resource-exhausted") return "The server’s save limit was reached. Wait a moment and try again.";
+  return code ? "Couldn’t save this change. Please try again." : error?.message || "Couldn’t save this change.";
+}
+
+function pendingSaveMessage() {
+  return navigator.onLine === false
+    ? "Offline. Waiting for save confirmation; don’t submit again."
+    : "Saving… Waiting for server confirmation.";
+}
+
+async function staffOperation(action, onSuccess) {
+  if (ui.operationBusy || ui.signOutBusy || !isStaffSignedIn()) return;
+  const session = staffSession;
+  ui.operationBusy = true; ui.operationMessage = pendingSaveMessage(); render();
+  const waiting = setTimeout(() => {
+    if (session !== staffSession || ui.view !== "manager") return;
+    ui.operationMessage = navigator.onLine === false ? pendingSaveMessage() : "Still waiting for save confirmation; don’t submit again.";
+    render();
+  }, 8000);
+  try {
+    const result = await action();
+    if (session === staffSession && isStaffSignedIn() && ui.view === "manager") {
+      ui.operationMessage = "";
+      if (onSuccess) await onSuccess(result);
+    }
+  } catch (error) {
+    if (session === staffSession && isStaffSignedIn()) ui.operationMessage = staffWriteErrorMessage(error);
+  } finally {
+    clearTimeout(waiting);
+    ui.operationBusy = false;
+    render();
+  }
 }
 
 root.addEventListener("click", async (e) => {
@@ -1001,6 +1079,7 @@ root.addEventListener("click", async (e) => {
     return;
   }
   const act = t.getAttribute("data-act");
+  if ((ui.operationBusy || ui.signOutBusy) && ui.view === "manager" && act !== "staff-logout") return;
   if (act === "customer-tab") { goCustomer(t.dataset.id); return; }
   if (act === "favorite") { toggleFavorite(t.dataset.id); void tapFeedback(); return; }
   if (act === "filter-case") { ui.inCaseOnly = !ui.inCaseOnly; render(); return; }
@@ -1014,13 +1093,12 @@ root.addEventListener("click", async (e) => {
   if (act === "disable-alerts") { await disableNotifications(); return; }
   if (act === "undo-swap") {
     const id = t.dataset.id;
-    await staffOperation(async () => { const swap = await undoLastSwap(id); ui.operationMessage = `Restored ${swap.inName}. Already delivered alerts cannot be recalled.`; void tapFeedback(); });
+    await staffOperation(() => undoLastSwap(id), swap => { ui.operationMessage = `Restored ${swap.inName}. Already delivered alerts cannot be recalled.`; void tapFeedback(); });
     return;
   }
   if (act === "confirm-notice") {
     const message = ui.notice;
-    await staffOperation(async () => {
-      const notice = await sendNotice(message);
+    await staffOperation(() => sendNotice(message), async notice => {
       if (!notice) return;
       ui.notice = ""; ui.sheet = null; ui.lastSeenNoticeAt = notice.at;
       onNoticeSuccess(notice);
@@ -1058,24 +1136,7 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (act === "staff-logout") {
-    void (async () => {
-      try {
-        await signOutStaff();
-      } catch {
-        /* still clear local session */
-      }
-      try {
-        sessionStorage.removeItem(STAFF_SESSION_KEY);
-      } catch {
-        /* private mode */
-      }
-      ui.password = "";
-      ui.sheet = null;
-      ui.selectedPan = null;
-      ui.pickId = null;
-      ui.staffError = "";
-      goCase();
-    })();
+    await signOutToUnlock("Signed out.");
     return;
   }
   if (act === "tap-pan") {
@@ -1113,20 +1174,20 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (act === "hours-normal") {
-    clearHoursOverride();
+    await staffOperation(clearHoursOverride, () => { ui.operationMessage = "Normal hours restored."; });
     return;
   }
   if (act === "hours-closed") {
-    setHoursOverride({ date: chicagoDate(), closed: true });
+    await staffOperation(() => setHoursOverride({ date: chicagoDate(), closed: true }), () => { ui.operationMessage = "Hours saved."; });
     return;
   }
   if (act === "hours-open") {
-    setHoursOverride({
+    await staffOperation(() => setHoursOverride({
       date: chicagoDate(),
       closed: false,
       open: "11:30",
       close: "21:00",
-    });
+    }), () => { ui.operationMessage = "Hours saved."; });
     return;
   }
   if (act === "pick") {
@@ -1137,8 +1198,7 @@ root.addEventListener("click", async (e) => {
   if (act === "do-swap") {
     if (ui.selectedPan == null || !ui.pickId) return;
     const slot = ui.selectedPan, incoming = ui.pickId, outgoing = ui.selectedPanId;
-    await staffOperation(async () => {
-      const swap = await swapPan(slot, incoming, outgoing);
+    await staffOperation(() => swapPan(slot, incoming, outgoing), async swap => {
       void tapFeedback();
       ui.sheet = null;
       ui.selectedPan = null;
@@ -1150,6 +1210,7 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (act === "open-add") {
+    ui.operationMessage = "";
     ui.sheet = "add";
     ui.selectedPan = null;
     ui.add = { name: "", note: "", dairyFree: false, color: "#A948A6" };
@@ -1157,18 +1218,19 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (act === "do-add") {
-    const flavor = addFlavor(ui.add);
-    if (flavor) {
+    await staffOperation(() => addFlavor({ ...ui.add }), flavor => {
+      if (!flavor) return;
       ui.sheet = null;
       ui.add = { name: "", note: "", dairyFree: false, color: "#A948A6" };
       showToast("manager", `<em>${esc(flavor.name)}</em>`, "Added to the catalog — tap a pan to swap it in");
-    }
+    });
     return;
   }
   if (act === "ig-reset") {
-    ui.ig = null;
-    resetInstagram();
-    showToast("manager", `<em>Instagram reset</em>`, "Default post is back on What’s Out");
+    await staffOperation(resetInstagram, () => {
+      ui.ig = null;
+      showToast("manager", `<em>Instagram reset</em>`, "Default post is back on What’s Out");
+    });
     return;
   }
   if (act === "ig-save") {
@@ -1179,7 +1241,7 @@ root.addEventListener("click", async (e) => {
   }
 });
 
-root.addEventListener("submit", (e) => {
+root.addEventListener("submit", async (e) => {
   const act = e.target.getAttribute && e.target.getAttribute("data-act");
   if (act === "staff-form") {
     e.preventDefault();
@@ -1190,10 +1252,11 @@ root.addEventListener("submit", (e) => {
   }
   if (act === "ig-form") {
     e.preventDefault();
-    const d = ensureIgDraft();
-    ui.ig = null;
-    setInstagram(d);
-    showToast("manager", `<em>Instagram updated</em>`, "What’s Out shows the new post");
+    const d = { ...ensureIgDraft() };
+    await staffOperation(() => setInstagram(d), () => {
+      ui.ig = null;
+      showToast("manager", `<em>Instagram updated</em>`, "What’s Out shows the new post");
+    });
   }
   if (act === "notice-form") {
     e.preventDefault();
@@ -1203,10 +1266,10 @@ root.addEventListener("submit", (e) => {
   }
 });
 
-root.addEventListener("change", (e) => {
+root.addEventListener("change", async (e) => {
   const t = e.target;
   const act = t.getAttribute && t.getAttribute("data-act");
-  if (act === "hours-close-at") applyClosingAt(t.value);
+  if (act === "hours-close-at") await applyClosingAt(t.value);
   if (act === "alert-preference") setAlertPreference(t.dataset.id, t.checked);
   if (act === "stock-toggle") {
     const id = t.dataset.id, key = t.dataset.key, checked = t.checked;
@@ -1251,7 +1314,7 @@ root.addEventListener("input", (e) => {
   }
   if (act === "add-name") {
     const btn = root.querySelector("[data-act=do-add]");
-    if (btn) btn.disabled = !t.value.trim();
+    if (btn) btn.disabled = ui.operationBusy || !t.value.trim();
   }
   if (act === "ig-image") ensureIgDraft().imageUrl = t.value;
   if (act === "ig-caption") ensureIgDraft().caption = t.value;
@@ -1332,19 +1395,18 @@ setInterval(() => {
 
 setupStaffIdleTimeout({
   isManagerActive: () => ui.view === "manager",
-  onTimeout: () => {
-    ui.password = "";
-    ui.sheet = null;
-    ui.selectedPan = null;
-    ui.pickId = null;
-    ui.staffError = "Signed out after 15 minutes idle.";
-    goStaff();
-  },
+  onTimeout: () => signOutToUnlock("Signed out after 15 minutes idle."),
 });
 
 setupSheetInteractions(root, dismissSheet);
 window.addEventListener("online", refreshCaseInfo);
 window.addEventListener("offline", refreshCaseInfo);
+for (const event of ["online", "offline"]) window.addEventListener(event, () => {
+  if (ui.operationBusy && ui.view === "manager") {
+    ui.operationMessage = pendingSaveMessage();
+    render();
+  }
+});
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     if (renderedDay !== chicagoDate()) render();
