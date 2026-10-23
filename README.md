@@ -96,7 +96,7 @@ The **Add flavor** form accepts a name, short note, scoop color, and dairy-free 
 | **Closed today** | Marks the shop closed for the current shop date. |
 | **Open today** | Uses an 11:30am–9pm window for the current shop date. |
 | **Closing at** | Saves a changed closing time for today and opens a suggested notice for preview. Re-selecting the saved time does not write again. The hours change is separate from posting that notice. |
-| **Instagram** | Saves an HTTPS image URL, caption, and post/profile link, or resets the card to its default content. Invalid image URLs retain the draft and show an error; a blank image URL uses the default photo. |
+| **Instagram** | Saves an HTTPS image URL, caption, and HTTPS post/profile link, or resets the card to its default content. Invalid URLs retain the draft and show an error; blank image/link fields use the default photo/profile. |
 
 Hours overrides apply only to their stored shop date. The Instagram card is maintained manually; it does not automatically fetch the latest Instagram post.
 
@@ -171,7 +171,7 @@ Firebase project `janarty-s`, Firestore document `shop/live`, is the shared sour
 | --- | --- |
 | `catalog` | Flavor IDs, names, descriptions/stories, scoop colors, dietary flags, and tags. |
 | `caseIds` | Ordered IDs for the eight active pans. |
-| `updatedAt` | Case/catalog update timestamp. |
+| `updatedAt` | Latest confirmed shop update: case/catalog, availability, notice, hours (including clear), or Instagram (including reset). |
 | `lastSwap` | Latest swap or undo, including information needed for a guarded undo. |
 | `lastNotice` | Latest shop announcement and its timestamp. |
 | `hoursOverride` | Optional override for a particular shop date. |

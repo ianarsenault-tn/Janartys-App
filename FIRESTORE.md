@@ -23,7 +23,8 @@ The browser's `STAFF_EMAILS` in `src/data.js` controls the Manager sign-in UI an
 - Only the two approved UID/email pairs may create or update it.
 - Staff updates must preserve the existing required fields, eight nonempty string case IDs, numeric update timestamp, and catalog limit of 500 entries.
 - Instagram may be null (use the default card) or a map. Its image URL, caption, permalink, and handle must be strings when present; its optional update timestamp must be numeric. Empty text and missing optional fields remain valid.
-- Catalog validation remains limited to the list type and 500-entry cap. Sparse legacy entries and nullable colors remain supported; these rules do not exhaustively validate catalog elements or URL schemes. The app validates HTTPS image URLs on save and rendering.
+- Notices may be null or a map; the message, when present, must be a string of at most 100 characters. Hours overrides may be null or a map; date, open, close, and mode must be strings when present, and closed must be boolean. Sparse legacy maps and closed days without opening/closing times remain valid.
+- Catalog validation remains limited to the list type and 500-entry cap. Sparse legacy entries and nullable colors remain supported; these rules do not exhaustively validate catalog elements or URL schemes. The app validates HTTPS image URLs and permalinks on save; rendering rejects unsafe schemes in older data.
 - Validation checks the resulting document, so partial hours, notice, catalog, Instagram, stock, swap, and undo updates remain supported. Optional `availability` and richer `lastSwap` fields remain compatible.
 - No app client, including staff, may delete the live board.
 - All other documents and subcollections are denied by default.
@@ -52,7 +53,7 @@ npm run test:rules
 
 The test command starts only a local Firestore emulator with the non-production project `demo-janartys-rules`. The tests refuse to run without `FIRESTORE_EMULATOR_HOST=127.0.0.1:8087`; they never use the production Firebase configuration. Tests cover unauthorized writes, newly created accounts claiming staff emails, exact UID/email matching, both existing staff accounts, partial updates, transactions, create/delete restrictions, invalid shapes, sibling paths, subcollections, and atomic batch rejection. GitHub Pages CI runs this suite before publishing the app.
 
-After reviewing and testing a rules change, deploy only Firestore rules to the explicit project:
+Before deploying stricter shape checks, inspect the existing live document for compatibility: an invalid legacy field can block unrelated partial updates. After reviewing and testing a rules change, deploy only Firestore rules to the explicit project:
 
 ```sh
 npx firebase login

@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, updateLabel } from "../src/presentation.js";
+import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeHttpsUrl, safeImageSrc, swapKey, updateLabel } from "../src/presentation.js";
 
-test("image sources require an absolute HTTPS URL", () => {
-  assert.equal(safeImageSrc("  HTTPS://example.com/photo.jpg?q=1&size=2  "), "https://example.com/photo.jpg?q=1&size=2");
-  for (const value of ["", " ", null, {}, "javascript:alert(1)", "data:image/png;base64,AA==", "http://example.com/photo.jpg", "//example.com/photo.jpg", "/photo.jpg", "photo.jpg", "https:example.com", "https://", "https://bad host/photo.jpg"]) {
-    assert.equal(safeImageSrc(value), "", String(value));
-  }
-});
+for (const [name, validate] of [["image sources", safeImageSrc], ["saved permalinks", safeHttpsUrl]]) {
+  test(`${name} require an absolute HTTPS URL`, () => {
+    assert.equal(validate("  HTTPS://example.com/photo.jpg?q=1&size=2  "), "https://example.com/photo.jpg?q=1&size=2");
+    for (const value of ["", " ", null, {}, "javascript:alert(1)", "data:image/png;base64,AA==", "mailto:staff@example.com", "ftp://example.com/post", "http://example.com/photo.jpg", "//example.com/photo.jpg", "/photo.jpg", "photo.jpg", "https:example.com", "https://", "https://bad host/photo.jpg"]) {
+      assert.equal(validate(value), "", String(value));
+    }
+  });
+}
 
 test("updates use a clear label with the shop's day rather than a raw hour count", () => {
   const now = Date.parse("2026-09-15T18:00:00Z");

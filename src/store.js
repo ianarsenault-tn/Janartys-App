@@ -4,7 +4,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { availabilityFor, swapPatch, undoPatch } from "./case-actions.js";
-import { safeImageSrc } from "./presentation.js";
+import { safeHttpsUrl, safeImageSrc } from "./presentation.js";
 import {
   HOURS_DETAIL,
   SEED_CATALOG,
@@ -236,21 +236,25 @@ export async function setInstagram({ imageUrl, caption, permalink }) {
   const nextUrl = safeImageSrc(String(imageUrl ?? "").trim() || SEED_INSTAGRAM.imageUrl);
   if (!nextUrl) throw new Error("Enter a valid HTTPS image URL, or leave it blank to use the default photo.");
   const nextCap = String(caption ?? "").trim();
-  const nextLink = String(permalink ?? "").trim();
+  // A blank permalink keeps the existing default-profile behavior.
+  const nextLink = safeHttpsUrl(String(permalink ?? "").trim() || SEED_INSTAGRAM.permalink);
+  if (!nextLink) throw new Error("Enter a valid HTTPS Instagram link, or leave it blank to use the default profile.");
   await changeLive(current => ({
     instagram: {
       imageUrl: nextUrl,
       caption: nextCap,
-      permalink: nextLink || SEED_INSTAGRAM.permalink,
+      permalink: nextLink,
       handle: current.instagram?.handle || SEED_INSTAGRAM.handle,
       updatedAt: Date.now(),
     },
+    updatedAt: Date.now(),
   }));
 }
 
 export async function resetInstagram() {
   await changeLive(() => ({
     instagram: cloneInstagram({ ...SEED_INSTAGRAM, updatedAt: Date.now() }),
+    updatedAt: Date.now(),
   }));
 }
 
@@ -401,7 +405,7 @@ export function getShopStatus(nowDate = new Date()) {
 
 export async function setHoursOverride(override) {
   const hoursOverride = override ? { ...override } : null;
-  await changeLive(() => ({ hoursOverride }));
+  await changeLive(() => ({ hoursOverride, updatedAt: Date.now() }));
 }
 
 export async function clearHoursOverride() {
@@ -448,7 +452,7 @@ export async function setFlavorAvailability(id, key, enabled) {
   await changeLive(current => {
     if (!current.catalog.some(f => f.id === id)) throw new Error("That flavor is no longer in the catalog.");
     if (key === "runningLow" && !current.caseIds.includes(id)) throw new Error("That flavor is no longer in the freezer.");
-    return { availability: { ...current.availability, [id]: { ...availabilityFor(current, id), [key]: enabled === true, at: Date.now() } } };
+    return { availability: { ...current.availability, [id]: { ...availabilityFor(current, id), [key]: enabled === true, at: Date.now() } }, updatedAt: Date.now() };
   });
 }
 
@@ -460,7 +464,7 @@ export async function sendNotice(message) {
     message: trimmed.slice(0, 100),
     at: Date.now(),
   };
-  await changeLive(() => ({ lastNotice: notice }));
+  await changeLive(() => ({ lastNotice: notice, updatedAt: Date.now() }));
   return notice;
 }
 
