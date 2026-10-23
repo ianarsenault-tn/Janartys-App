@@ -158,3 +158,41 @@ test("narrow shape checks preserve sparse catalogs, optional Instagram fields, a
     await assertSucceeds(updateDoc(live(db), { hoursOverride: null }));
   }
 });
+
+test("notices reject malformed messages and enforce the 100-character boundary", async () => {
+  const db = auth(...staff[0]);
+  for (const lastNotice of ["invalid", [], 42, true, ...[null, 42, false, [], {}, "x".repeat(101)].map(message => ({ message }))]) {
+    await assertFails(updateDoc(live(db), { lastNotice }));
+  }
+  for (const lastNotice of [null, {}, { message: "" }, { message: "🍦".repeat(50) }, { id: "notice", message: "x".repeat(100), at: now }]) {
+    await assertSucceeds(updateDoc(live(db), { lastNotice }));
+    await assertSucceeds(updateDoc(live(db), { updatedAt: now + 1 }));
+  }
+});
+
+test("hours overrides reject non-maps and incorrectly typed fields", async () => {
+  const db = auth(...staff[0]);
+  for (const hoursOverride of ["invalid", [], 42, true]) {
+    await assertFails(updateDoc(live(db), { hoursOverride }));
+  }
+  for (const field of ["date", "open", "close", "mode"]) {
+    for (const value of [null, 42, false, [], {}]) {
+      await assertFails(updateDoc(live(db), { hoursOverride: { [field]: value } }));
+    }
+  }
+  for (const closed of [null, "false", 0, [], {}]) {
+    await assertFails(updateDoc(live(db), { hoursOverride: { date: "2026-10-23", closed } }));
+  }
+});
+
+test("nullable and sparse hours overrides remain compatible with unrelated updates", async () => {
+  const db = auth(...staff[0]);
+  for (const hoursOverride of [
+    null, {}, { date: "2026-10-23" }, { date: "2026-10-23", closed: true },
+    { date: "2026-10-23", closed: false, open: "11:30", close: "21:00" },
+    { date: "2026-10-23", closed: false, open: "11:30", close: "19:00", mode: "close-at" },
+  ]) {
+    await assertSucceeds(updateDoc(live(db), { hoursOverride }));
+    await assertSucceeds(updateDoc(live(db), { lastNotice: { message: "Open today", at: now }, updatedAt: now + 1 }));
+  }
+});

@@ -27,6 +27,22 @@ service cloud.firestore {
         && ig.get("updatedAt", 0) is number);
     }
 
+    function isNotice(notice) {
+      return notice == null || (notice is map
+        && notice.get("message", "") is string
+        && notice.get("message", "").size() <= 100);
+    }
+
+    function isHoursOverride(hours) {
+      // Closed days and legacy overrides may omit opening/closing details.
+      return hours == null || (hours is map
+        && hours.get("date", "") is string
+        && hours.get("closed", false) is bool
+        && hours.get("open", "") is string
+        && hours.get("close", "") is string
+        && hours.get("mode", "") is string);
+    }
+
     // Validate the resulting document, including after partial staff updates.
     // Catalog entries stay compatible with sparse legacy records. Rules have no
     // generic list-element validator; do not claim exhaustive catalog validation.
@@ -44,6 +60,8 @@ service cloud.firestore {
         && isCaseId(d.caseIds[4]) && isCaseId(d.caseIds[5])
         && isCaseId(d.caseIds[6]) && isCaseId(d.caseIds[7])
         && isInstagram(d.instagram)
+        && isNotice(d.lastNotice)
+        && isHoursOverride(d.hoursOverride)
         && d.updatedAt is number
         && d.catalog.size() <= 500;
     }

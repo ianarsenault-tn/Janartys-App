@@ -2,7 +2,7 @@ import { SHOP_TZ } from "./data.js";
 
 export const JUST_OUT_MS = 30 * 60 * 1000;
 
-export function safeImageSrc(value) {
+export function safeHttpsUrl(value) {
   if (typeof value !== "string" || !/^https:\/\//i.test(value.trim())) return "";
   try {
     const url = new URL(value.trim());
@@ -11,6 +11,8 @@ export function safeImageSrc(value) {
     return "";
   }
 }
+
+export const safeImageSrc = safeHttpsUrl;
 
 function timestamp(value) {
   if (value == null || value === "") return NaN;

@@ -56,6 +56,7 @@ const saves = [
   ["Instagram reset", h => h.store.resetInstagram(), "instagram"],
   ["Add flavor", h => h.store.addFlavor({ name: "Test flavor", note: "A note", dairyFree: true, color: "#112233" }), "catalog"],
   ["notice", h => h.store.sendNotice("Closing at 7 tonight"), "lastNotice"],
+  ...["pintsAvailable", "runningLow"].map(key => [key, h => h.store.setFlavorAvailability(h.store.getState().caseIds[0], key, true), "availability"]),
 ];
 for (const [name, save, field] of saves) {
   test(`${name} waits for acknowledgement and rejects without replacing newer confirmed state`, async () => {
@@ -88,6 +89,9 @@ for (const [name, save, field] of saves) {
     await save(h);
     assert.equal(h.backend.writes.length, 1);
     assert.ok(field in h.backend.writes[0]);
+    assert.ok(h.store.getState().updatedAt > before.updatedAt);
+    assert.equal(h.store.getState().updatedAt, h.backend.writes[0].updatedAt);
+    assert.equal(JSON.parse(h.localStorage.getItem(STORAGE_KEY)).updatedAt, h.backend.writes[0].updatedAt);
     assert.equal(h.store.getSyncStatus().writeError, null);
   });
 }
@@ -130,6 +134,7 @@ for (const [code, message] of [
 
 test("pending notice ignores local echoes, blocks repeats, and publishes only after acknowledgement", async () => {
   const h = await managerHarness();
+  const before = h.store.getState().updatedAt;
   await h.input("notice-msg", "Pending notice");
   await h.submit("notice-form");
   h.backend.gate = deferred();
@@ -137,6 +142,7 @@ test("pending notice ignores local echoes, blocks repeats, and publishes only af
   await settle();
   h.emitSnapshot({ ...h.backend.remote, ...h.backend.attempts[0] }, { hasPendingWrites: true });
   assert.equal(h.store.getState().lastNotice, null);
+  assert.equal(h.store.getState().updatedAt, before);
   assert.equal(JSON.parse(h.localStorage.getItem(STORAGE_KEY)).lastNotice, null);
   assert.match(h.root.innerHTML, /Waiting for server confirmation/);
   assert.match(h.root.innerHTML, /data-act="confirm-notice" disabled/);
@@ -148,6 +154,7 @@ test("pending notice ignores local echoes, blocks repeats, and publishes only af
   h.backend.gate.resolve();
   await pending;
   assert.equal(h.backend.writes.length, 1);
+  assert.ok(h.store.getState().updatedAt > before);
   assert.equal(h.backend.published.length, 1);
   assert.equal(h.backend.published[0].message, "Pending notice");
   assert.doesNotMatch(h.root.innerHTML, /aria-label="Preview shop notice"/);
@@ -170,6 +177,38 @@ test("Instagram rejects invalid image drafts without saving and preserves blank/
   await h.input("ig-image", " ");
   await h.submit("ig-form");
   assert.equal(h.store.getInstagram().imageUrl, SEED_INSTAGRAM.imageUrl);
+});
+
+test("Instagram rejects invalid permalink drafts before writing and preserves blank/default behavior", async () => {
+  const h = await managerHarness();
+  for (const value of ["javascript:alert(1)", "data:text/html,bad", "http://example.com/post", "ftp://example.com/post", "/post", "not a URL"]) {
+    await h.input("ig-link", value);
+    await h.submit("ig-form");
+    assert.match(h.root.innerHTML, /Enter a valid HTTPS Instagram link/);
+    assert.ok(h.root.innerHTML.includes(value));
+    assert.equal(h.backend.attempts.length, 0);
+    assert.equal(h.store.getInstagram().permalink, SEED_INSTAGRAM.permalink);
+    assert.doesNotMatch(h.root.innerHTML, /<em>Instagram updated<\/em>/);
+  }
+  await h.input("ig-link", " https://www.instagram.com/p/example/ ");
+  await h.submit("ig-form");
+  assert.equal(h.store.getInstagram().permalink, "https://www.instagram.com/p/example/");
+  for (const blank of ["", "   "]) {
+    await h.input("ig-link", blank);
+    await h.submit("ig-form");
+    assert.equal(h.store.getInstagram().permalink, SEED_INSTAGRAM.permalink);
+  }
+});
+
+test("unsafe stored Instagram permalinks render the default profile without rewriting data", async () => {
+  for (const permalink of ["javascript:alert(1)", "data:text/html,bad", "ftp://example.com/post", "/post", ""]) {
+    const remote = fixture();
+    remote.instagram.permalink = permalink;
+    const h = await managerHarness({ remote });
+    await h.click("go-case");
+    assert.ok(h.root.innerHTML.includes(`<a class="ig-card" href="${SEED_INSTAGRAM.permalink}"`));
+    assert.equal(h.backend.attempts.length, 0);
+  }
 });
 
 test("unsafe stored Instagram image URLs render the default photo", async () => {
@@ -230,19 +269,23 @@ test("pending Add flavor prevents duplicate submissions and only toasts after ac
 for (const action of ["save", "reset"]) {
   test(`Instagram ${action} retains drafts on rejection and toasts only after ack`, async () => {
     const h = await managerHarness();
+    const before = h.store.getState().updatedAt;
     await h.input("ig-caption", "Keep this draft");
     const save = () => action === "save" ? h.submit("ig-form") : h.click("ig-reset");
     h.backend.error = failure("permission-denied");
     await save();
+    assert.equal(h.store.getState().updatedAt, before);
     assert.match(h.root.innerHTML, /Keep this draft/);
     assert.doesNotMatch(h.root.innerHTML, /<em>Instagram (updated|reset)<\/em>/);
     h.backend.error = null;
     h.backend.gate = deferred();
     const pending = save();
     await settle();
+    assert.equal(h.store.getState().updatedAt, before);
     assert.doesNotMatch(h.root.innerHTML, /<em>Instagram (updated|reset)<\/em>/);
     h.backend.gate.resolve();
     await pending;
+    assert.ok(h.store.getState().updatedAt > before);
     assert.match(h.root.innerHTML, action === "save" ? /<em>Instagram updated<\/em>/ : /<em>Instagram reset<\/em>/);
     if (action === "reset") assert.doesNotMatch(h.root.innerHTML, /Keep this draft/);
   });
