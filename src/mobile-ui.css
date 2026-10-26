@@ -86,6 +86,12 @@ textarea.field, .sheet textarea.field { font-size: 1rem; height: 6rem; }
 .ig-mgr-btns { flex-wrap: wrap; }
 .ig-mgr-btns .primary-btn { height: auto; font-size: 1rem; }
 
+/* A full catalog must scroll, not compress rows below their wrapped text. */
+.catalog > .row { flex: 0 0 auto; }
+.catalog > .row > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hours-mgr [data-act="open-schedule"] { margin-top: 12px; }
+.ig-mgr > [data-ig-connection] { margin-bottom: 12px; }
+
 /* Safari's intrinsic time-input width must not force the closing-time row
    beyond a small phone. Both the row and dated-hours fields can stack. */
 .hours-close { max-width: 100%; flex-wrap: wrap; height: auto; }
