@@ -138,7 +138,8 @@ test("About and Privacy are reachable from every customer view without sign-in o
   for (const view of ["case", "library", "favorites", "alerts"]) {
     await h.click("customer-tab", { id: view }); assert.match(h.root.innerHTML, /data-act="open-about"/);
     await h.click("open-about"); assert.match(h.root.innerHTML, /aria-label="About and help"/); assert.match(h.root.innerHTML, /App content version/);
-    assert.match(h.root.innerHTML, /mailto:janartys@gmail.com/); assert.match(h.root.innerHTML, /tel:\+16159180085/);
+    assert.match(h.root.innerHTML, /email <a href="mailto:janartys@gmail\.com">janartys@gmail\.com<\/a>/);
+    assert.match(h.root.innerHTML, /call <a href="tel:\+16159180085">615-918-0085<\/a>/);
     await h.click("open-privacy"); assert.match(h.root.innerHTML, /aria-label="Privacy policy"/); assert.match(h.root.innerHTML, /topic subscriptions identify the flavors/);
     await h.click("back-about"); await h.click("close-sheet");
     assert.doesNotMatch(h.root.innerHTML, /aria-label="About and help"/);
