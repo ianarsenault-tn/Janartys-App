@@ -2,6 +2,27 @@
 
 The authoritative rules are [firestore.rules](firestore.rules), deployed using [firebase.json](firebase.json). The Firebase web API key is public client configuration; the database rules enforce access. Never publish unrestricted writes, even temporarily while setting up sign-in.
 
+## Production deployment and verification — October 26, 2026
+
+Backend deployment verification is complete for [main commit `3c2784119549f02451e8de3f0e96bf72c47990df`](https://github.com/ianarsenault-tn/Janartys-App/commit/3c2784119549f02451e8de3f0e96bf72c47990df). The rules and relay are current for that revision; their deployment is not outstanding. This is a dated verification record, not an automatic deployment guarantee for later changes.
+
+- **Firestore:** At 12:55 PM CDT (America/Chicago), Firebase CLI deployed only `firestore:rules` to `janarty-s`, adding the missing notice length/type and hours field-type checks. The active rules were then retrieved through the Firebase Rules API and matched the checked-in file after line-ending normalization. Console also showed the new active revision.
+- **Relay:** The existing October 23 deployment, version `035a9e74-bd99-4b07-875c-6d0fa0e5f1a3`, was downloaded and compared with a Wrangler dry-run build from the reviewed commit. The JavaScript bundles were byte-for-byte identical, and the deployed project, database, rate limits, and runtime configuration matched. No relay redeployment was necessary.
+- **Sending remains disabled:** The deployed relay has `PUSH_ENABLED=false`, no `FCM_SERVICE_ACCOUNT` binding, and `/health` returned `{"ready":false}`. Native messaging remains excluded and APNs was not enabled. No publish requests or notifications were sent. Health alone is not version proof; the bundle comparison above establishes the deployed-code match.
+- **Validation:** All 16 repository rules tests plus 3 release-only compatibility tests against a local copy of `shop/live` passed in the `demo-janartys-rules` emulator. Both approved staff identities could make valid partial updates; anonymous writes and invalid notice/hours values were rejected. These additional compatibility checks are not part of the standard 16-test suite.
+- **Production preservation:** The complete live document and its update timestamp were unchanged before and after deployment. The customer app showed Connected, rendered all eight flavors, and produced no browser error logs. Production staff writes were not attempted; authorization was tested in the emulator. No production document cleanup or migration was needed.
+
+Release identifiers and comparison hashes:
+
+| Evidence | Value |
+| --- | --- |
+| Active ruleset | `projects/janarty-s/rulesets/981e7e2c-b456-4aed-a284-eddb8b12a9a5` |
+| Previous ruleset retained for rollback | `projects/janarty-s/rulesets/10052f33-c908-43bd-b9e7-a2250b8f637c` |
+| Rules SHA-256 (CRLF normalized to LF; surrounding whitespace trimmed) | `d4248c99411c95c59188530bc584e3a1a0ad2059d7400f93593df535962fbbd3` |
+| Deployed/main relay bundle SHA-256 | `90dc67ae703f56e9c6aafcf56c26df2ffea688972a999cd0636065eb2e430bf0` |
+
+The previous October 23 rules revision remains in Firebase Console history. Copies of the previous rules, relay code/configuration, deployment metadata, live-document snapshots, and test logs were also preserved locally for rollback and audit. GitHub Pages remains a separate deployment and was not redeployed as part of this backend release.
+
 ## Authorized staff
 
 Only these existing Firebase Authentication accounts may create or update `shop/live`. Both the UID and its matching email must be present in the authenticated Firebase token:
