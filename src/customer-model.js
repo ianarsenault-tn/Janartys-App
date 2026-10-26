@@ -11,7 +11,7 @@ export function normalizeCustomer(value = {}) {
 
 export function filterLibrary(catalog, { query = "", favoritesOnly = false, favorites = [], inCaseOnly = false, caseIds = [], dairyFree = false } = {}) {
   const needle = query.trim().toLocaleLowerCase("en");
-  return catalog.filter(f => (!favoritesOnly || favorites.includes(f.id)) && (!inCaseOnly || caseIds.includes(f.id)) && (!dairyFree || f.dairyFree) &&
+  return catalog.filter(f => (!f.archived || favoritesOnly) && (!favoritesOnly || favorites.includes(f.id)) && (!inCaseOnly || (!f.archived && caseIds.includes(f.id))) && (!dairyFree || f.dairyFree) &&
     (!needle || `${f.name} ${f.note || ""} ${(f.tags || []).join(" ")}`.toLocaleLowerCase("en").includes(needle)))
     .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
 }

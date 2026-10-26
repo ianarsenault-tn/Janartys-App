@@ -23,16 +23,19 @@ import { setupStaffIdleTimeout } from "./staff-idle.js";
 import { INSTAGRAM_FEED_URL, INSTAGRAM_CONNECT_URL } from "./instagram-config.js";
 import { createInstagramConnection } from "./instagram-connect.js";
 import { createInstagramFeed, featuredInstagram, FEED_REFRESH_MS } from "./instagram-feed.js";
-import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, updateLabel } from "./presentation.js";
+import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, caseUpdateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
 import { tapFeedback } from "./feedback.js";
 import { fitFlavorNames, setupFlavorNameFitting } from "./flavor-name-fit.js";
 import { getCustomer, subscribeCustomer, toggleFavorite, setAlertPreference, customerStorageAvailable } from "./customer-store.js";
-import { customerNav, libraryHtml, alertsHtml, favoriteButton, availabilityChips } from "./customer-ui.js";
+import { customerNav, libraryHtml, alertsHtml, favoriteButton, availabilityChips, flavorLocation } from "./customer-ui.js";
+import { catalogSheet, editSheet, duplicateWarning } from "./catalog-ui.js";
 import { availabilityFor, canUndoSwap } from "./case-actions.js";
 import { enableNotifications, disableNotifications, initializeNotifications, notificationStatus, subscribeNotifications, publishShopEvent } from "./notifications.js";
 import {
   addFlavor,
+  editFlavor,
+  setFlavorArchived,
   availableForSwap,
   caseFlavors,
   chicagoDate,
@@ -111,7 +114,9 @@ let seenSwap = "";
 try { seenSwap = sessionStorage.getItem("janartys-seen-swap") || ""; } catch { /* storage is optional */ }
 
 function justOutSwap() {
-  return freshSwap(getState().lastSwap);
+  const state = getState();
+  const swap = freshSwap(state.lastSwap);
+  return state.caseLoaded && swap && !availabilityFor(state, swap.inId).soldOut ? swap : null;
 }
 
 function scheduleJustOutClear() {
@@ -142,6 +147,8 @@ const ui = {
   signOutBusy: false,
   toast: null, // { kind, html, sub }
   add: { name: "", note: "", dairyFree: false, color: "#A948A6" },
+  catalogSearch: "",
+  edit: null,
   ig: null, // { imageUrl, caption, permalink } draft in Manager
   notice: "",
   lastSeenSwapAt: 0,
@@ -260,13 +267,13 @@ function sheetControls() {
 
 function refreshCaseInfo() {
   const updated = root.querySelector("[data-updated]");
-  if (updated) updated.textContent = updateLabel(getState().updatedAt);
+  if (updated) updated.textContent = caseUpdateLabel(getState());
   const connection = root.querySelector("[data-connection]");
   if (connection) {
-    const label = connectionLabel(getSyncStatus().live, navigator.onLine);
+    const label = connectionLabel(getSyncStatus().live, navigator.onLine, getState().caseLoaded);
     connection.dataset.state = label.toLowerCase().replace(" ", "-");
     connection.querySelector("[data-connection-label]").textContent = label;
-    connection.title = label === "Connected" ? "Receiving updates from the shop" : "Showing the last available flavors; reconnect to check for updates";
+    connection.title = label === "Connected" ? "Receiving updates from the shop" : getState().caseLoaded ? "Showing the last available flavors; reconnect to check for updates" : "Reconnect to load the current flavors";
   }
   const banner = root.querySelector("[data-shop-notice]");
   if (banner) {
@@ -519,7 +526,7 @@ function renderStorySheet() {
     <button class="veil" type="button" tabindex="-1" aria-hidden="true" data-act="close-sheet" aria-label="Close"></button>
     <aside class="sheet story-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="${esc(f.name)}">
       ${sheetControls()}
-      <div class="sheet-kicker">${getState().caseIds.includes(f.id) ? "In the freezer" : "From the flavor library"}</div>
+      <div class="sheet-kicker">${flavorLocation(getState(), f)}</div>
       <div class="story-head">
         <span class="story-scoop" style="background: ${esc(f.scoopColor)}"></span>
         <div class="sheet-title">${esc(f.name)}</div>
@@ -586,7 +593,7 @@ function renderMapsSheet() {
 
 function renderCase() {
   const state = getState();
-  const flavors = caseFlavors();
+  const flavors = state.caseLoaded ? caseFlavors() : [];
   const fresh = justOutSwap();
   const freshId = fresh?.inId;
   const arrival = !ui.sheet && fresh && swapKey(fresh) !== seenSwap;
@@ -635,7 +642,7 @@ function renderCase() {
         </div>
       </header>
       <div class="case-meta">
-        <span data-updated>${esc(updateLabel(state.updatedAt))}</span>
+        <span data-updated>${esc(caseUpdateLabel(state))}</span>
         <span class="connection" data-connection role="status"><span class="connection-dot" aria-hidden="true"></span><span data-connection-label></span></span>
       </div>
       <div class="status-row">
@@ -651,7 +658,7 @@ function renderCase() {
       <section class="shop-notice" data-shop-notice aria-label="Shop notice" hidden>
         <span class="shop-notice-label">From the shop</span><p role="status" aria-live="polite"></p>
       </section>
-      <div class="case ${!caseIntroduced ? "case-enter" : ""}">${cards}</div>
+      <div class="case ${!caseIntroduced ? "case-enter" : ""}">${cards || `<p class="empty-cat" role="status">Current flavors haven’t loaded yet. Please reconnect to see what’s out.</p>`}</div>
       <span class="sr-only" role="status">${arrival ? `${esc(fresh.inName || flavorById(fresh.inId)?.name || "A new flavor")} just came out` : ""}</span>
       ${igCardHtml()}
     </div>
@@ -726,7 +733,7 @@ function renderSwapSheet() {
   const inCase = new Set(getState().caseIds);
   const favs = FAVORITE_IDS.map((id) => flavorById(id)).filter(Boolean);
   const favHtml = favs
-    .filter((f) => !inCase.has(f.id))
+    .filter((f) => !f.archived && !inCase.has(f.id))
     .map(
       (f) =>
         `<button class="fav ${ui.pickId === f.id ? "on" : ""}" type="button" data-act="pick" data-id="${esc(f.id)}">${esc(f.name)}</button>`
@@ -757,7 +764,7 @@ function renderSwapSheet() {
       ${sheetControls()}
       <div class="sheet-kicker">Pan ${slot + 1}</div>
       <div class="sheet-title">Replace ${esc(current.name)}</div>
-      <fieldset class="stock-controls" ${ui.operationBusy ? "disabled" : ""}><legend>Today’s availability</legend><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="pintsAvailable" ${stock.pintsAvailable ? "checked" : ""}/>Pints available</label><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="runningLow" ${stock.runningLow ? "checked" : ""}/>Running low</label><p>Labels reset at midnight. Running low also clears when this pan is replaced.</p></fieldset>
+      <fieldset class="stock-controls" ${ui.operationBusy ? "disabled" : ""}><legend>Pan availability</legend><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="soldOut" ${stock.soldOut ? "checked" : ""}/>Sold out / empty pan</label><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="pintsAvailable" ${stock.pintsAvailable ? "checked" : ""}/>Pints available</label><label><input type="checkbox" data-act="stock-toggle" data-id="${esc(current.id)}" data-key="runningLow" ${stock.runningLow ? "checked" : ""} ${stock.soldOut ? "disabled" : ""}/>Running low</label><p>Sold out stays on until you uncheck it after restocking or swap in another flavor. Pints and running low reset at midnight.</p></fieldset>
       ${ui.operationMessage ? `<p class="staff-message">${esc(ui.operationMessage)}</p>` : ""}
       <label class="search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -792,6 +799,7 @@ function renderAddSheet() {
           <label class="field-label" for="f-name">Name</label>
           <input class="field" id="f-name" name="name" required maxlength="40" value="${esc(a.name)}" placeholder="Rose Cardamom Pistachio" data-act="add-name" />
         </div>
+        ${duplicateWarning(getState().catalog, a, null, "add")}
         <div>
           <label class="field-label" for="f-note">Note</label>
           <textarea class="field" id="f-note" name="note" maxlength="80" placeholder="Floral, nutty, a Saturday night flavor" data-act="add-note">${esc(a.note)}</textarea>
@@ -829,7 +837,7 @@ function renderManager() {
         <div class="pan-num">Pan ${i + 1}</div>
         <span class="pan-scoop" style="background: ${esc(f.scoopColor)}"></span>
         <div class="pan-name">${esc(f.name)}</div>
-        <div class="pan-stock">${availabilityFor(getState(), f.id).pintsAvailable ? "Pints" : ""}${availabilityFor(getState(), f.id).runningLow ? " · Low" : ""}</div>
+        <div class="pan-stock">${[availabilityFor(getState(), f.id).soldOut && "Sold out", availabilityFor(getState(), f.id).pintsAvailable && "Pints", availabilityFor(getState(), f.id).runningLow && "Low"].filter(Boolean).join(" · ")}</div>
       </button>`;
     })
     .join("");
@@ -837,6 +845,8 @@ function renderManager() {
   let sheet = "";
   if (ui.sheet === "swap") sheet = renderSwapSheet();
   if (ui.sheet === "add") sheet = renderAddSheet();
+  if (ui.sheet === "catalog") sheet = catalogSheet(getState(), ui, sheetControls());
+  if (ui.sheet === "edit" && ui.edit) sheet = editSheet(getState(), ui, sheetControls());
   if (ui.sheet === "notice-preview") sheet = renderNoticePreview();
 
   root.innerHTML = `
@@ -849,11 +859,12 @@ function renderManager() {
         </div>
         <button class="nav-case" type="button" data-act="go-case">Case</button>
       </header>
-      <p class="hint">Tap a pan to swap it. New flavors get a Just out badge.</p>
+      <p class="hint">Tap a pan to swap it or mark it sold out. New flavors get a Just out badge.</p>
       ${getSyncStatus().writeError && !ui.operationBusy ? `<p class="sync-warn">${esc(staffWriteErrorMessage(getSyncStatus().writeError))}</p>` : ""}
       <div class="pans">${pans}</div>
       <div class="mgr-actions">
         <button class="ghost-btn" type="button" data-act="open-add">Add flavor</button>
+        <button class="ghost-btn" type="button" data-act="manage-flavors">Manage flavors</button>
       </div>
       ${canUndoSwap(getState()) ? `<div class="undo-panel"><span><strong>Last swap</strong><br/>${esc(getState().lastSwap.outName)} → ${esc(getState().lastSwap.inName)}<br/><small>Undo is available for five minutes.</small></span><button type="button" class="text-button" data-act="undo-swap" data-id="${esc(getState().lastSwap.id)}" ${ui.operationBusy ? "disabled" : ""}>Undo swap</button></div>` : ""}
       ${ui.operationMessage ? `<p class="staff-message" role="status">${esc(ui.operationMessage)}</p>` : ""}
@@ -924,15 +935,15 @@ function renderManager() {
 function render() {
   if (ui.sheet === "story" && !flavorById(ui.storyId)) ui.sheet = null;
   const focus = document.activeElement;
-  const nextSheet = ui.sheet ? `${ui.sheet}:${ui.storyId || ui.selectedPan || ""}` : "";
+  const nextSheet = ui.sheet ? `${ui.sheet}:${ui.storyId || (ui.sheet === "edit" ? ui.edit?.id : ui.selectedPan) || ""}` : "";
   const sameView = renderedView === ui.view;
   const scrollTop = sameView ? root.querySelector(".screen")?.scrollTop || 0 : 0;
   const sheetScroll = nextSheet === renderedSheet ? root.querySelector(".sheet")?.scrollTop || 0 : 0;
   const focusedControl = focus?.closest?.("[data-act]");
   const focusKey = focusedControl ? { act: focusedControl.dataset.act, id: focusedControl.dataset.id, slot: focusedControl.dataset.slot, label: focusedControl.getAttribute("aria-label") } : null;
   const restoreSearch =
-    focus && focus.getAttribute && ["search", "library-search"].includes(focus.getAttribute("data-act"));
-  const restoreAdd = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("add-");
+    focus && focus.getAttribute && ["search", "library-search", "catalog-search"].includes(focus.getAttribute("data-act"));
+  const restoreAdd = focus && focus.getAttribute && /^(add|edit)-/.test(focus.getAttribute("data-act") || "");
   const restoreIg = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("ig-");
   const restoreNotice = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("notice-");
   const restorePass = focus && focus.getAttribute && focus.getAttribute("data-act") === "staff-pass";
@@ -1157,7 +1168,7 @@ root.addEventListener("click", async (e) => {
     });
     return;
   }
-  if (["open-story", "open-hours", "open-maps", "tap-pan", "open-add"].includes(act)) {
+  if (["open-story", "open-hours", "open-maps", "tap-pan", "open-add", "manage-flavors"].includes(act)) {
     sheetOpener = { act, id: t.dataset.id, slot: t.dataset.slot };
   }
   if (act === "hours-close-at") {
@@ -1260,6 +1271,35 @@ root.addEventListener("click", async (e) => {
     });
     return;
   }
+  if (act === "manage-flavors") {
+    ui.catalogSearch = ""; ui.operationMessage = ""; ui.sheet = "catalog"; render(); return;
+  }
+  if (act === "edit-flavor") {
+    const f = flavorById(t.dataset.id);
+    if (!f) return;
+    ui.edit = { id: f.id, original: { ...f, tags: [...f.tags] }, draft: { ...f, tagsText: f.tags.join(", "), allowDuplicate: false }, confirmArchive: false };
+    ui.operationMessage = ""; ui.sheet = "edit"; render(); return;
+  }
+  if (act === "save-flavor" && ui.edit) {
+    const { id, original, draft } = ui.edit;
+    const changes = { name: draft.name, note: draft.note, story: draft.story, dairyFree: draft.dairyFree,
+      tags: draft.tagsText === original.tags.join(", ") ? original.tags : draft.tagsText.split(",").map(s => s.trim()).filter(Boolean) };
+    await staffOperation(() => editFlavor(id, original, changes, draft.allowDuplicate), () => {
+      ui.sheet = "catalog"; ui.edit = null; showToast("manager", "Flavor saved", "Catalog updated");
+    }); return;
+  }
+  if (["archive-flavor", "cancel-archive"].includes(act) && ui.edit) {
+    ui.edit.confirmArchive = act === "archive-flavor"; render(); return;
+  }
+  if (["confirm-archive", "restore-flavor"].includes(act) && ui.edit) {
+    const archived = act === "confirm-archive";
+    if (archived && !ui.edit.confirmArchive) return;
+    const id = ui.edit.id;
+    await staffOperation(() => setFlavorArchived(id, archived), () => {
+      ui.sheet = "catalog"; ui.edit = null;
+      showToast("manager", archived ? "Flavor archived" : "Flavor restored", "Saved favorites are kept");
+    }); return;
+  }
   if (act === "open-add") {
     ui.operationMessage = "";
     ui.sheet = "add";
@@ -1354,7 +1394,17 @@ root.addEventListener("input", (e) => {
       root.querySelector(".staff")?.classList.remove("shake");
     }
   }
-  if (act === "add-name") ui.add.name = t.value;
+  if (act === "catalog-search") { ui.catalogSearch = t.value; render(); }
+  if (act?.startsWith("edit-") && ui.edit) {
+    const key = act.slice(5);
+    if (["name", "note", "story"].includes(key)) ui.edit.draft[key] = t.value;
+    if (key === "tags") ui.edit.draft.tagsText = t.value;
+    if (key === "df") ui.edit.draft.dairyFree = t.checked;
+    if (key === "duplicate") ui.edit.draft.allowDuplicate = t.checked;
+    if (key === "name") { ui.edit.draft.allowDuplicate = false; render(); }
+  }
+  if (act === "add-duplicate") ui.add.allowDuplicate = t.checked;
+  if (act === "add-name") { ui.add.name = t.value; ui.add.allowDuplicate = false; render(); }
   if (act === "add-note") ui.add.note = t.value;
   if (act === "add-color") {
     ui.add.color = t.value;

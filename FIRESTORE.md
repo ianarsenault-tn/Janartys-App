@@ -88,3 +88,12 @@ GitHub Pages deployment does not deploy database rules. Check the live published
 On October 19, 2026, the live baseline already had staff email restrictions, shape checks, and delete denial. The outdated open-write example in this document did not reflect that live baseline; it has been removed. The checked-in rules add exact account-ID binding.
 
 The account-ID rules were published to `janarty-s` on October 19, 2026 at 10:30 AM America/Chicago. The published version was checked in Console. Rules Playground allowed public reads and updates under both approved identities, while denying anonymous updates and an unapproved UID claiming a staff email. Local emulator tests also verified all staff editing workflows and rejected invalid or unauthorized writes. These checks did not write to the live flavor board or send notifications.
+
+
+## Optional catalog and case metadata
+
+Manager supports optional `catalog[].archived`, `availability[id].soldOut`, and `caseUpdatedAt` fields within `shop/live`. Existing deployed rules allow these fields; no rules deployment, migration, or seed rewrite is required for this change. Emulator regression coverage verifies staff writes and denial of anonymous writes with the new fields.
+
+`caseUpdatedAt` advances only on swaps, undo, pan stock changes, and edits to a flavor occupying a pan. Older documents show an unknown case-update time rather than borrowing the general `updatedAt`. The local cache records `caseLoaded` after loading a valid shop snapshot; this marker is not written to Firestore. Older unmarked local caches require a shop snapshot before showing current pans. Older app versions do not maintain or display the new fields, so staff should reload the app before using these controls.
+
+Archiving preserves the entry and ID, hides it from ordinary browsing/swap choices, and keeps saved favorites. It is blocked for occupied pans. Sold-out status persists past midnight until staff restock or replace the pan. This implementation does not change the live catalog or resolve existing duplicate entries; that remains pending Marty’s confirmation.

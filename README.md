@@ -34,14 +34,14 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 
 - Eight flavor cards sit inside a reusable, top-down freezer frame made with CSS. Scoop colors and descriptions represent each flavor; individual flavor photos are not required.
 - Cards show the flavor name, a short description, and a dairy-free chip where applicable. The page also presents the shop’s gluten-free message.
-- Staff-maintained **Pints available** and **Running low** labels appear when active.
+- Staff-maintained **Pints available**, **Running low**, and **Sold out** labels appear when active. Sold-out pans remain visible but are excluded from the available-only library filter.
 - The latest incoming flavor receives a **Just out** badge for 30 minutes, with an arrival animation and accessible announcement. Undoing a swap does not create a fresh-arrival badge.
-- **Last updated** describes the case/catalog update time in the shop’s time zone. **Connected**, **Saved view**, and **Offline** distinguish live data from cached information.
+- **Case updated** describes the last case-affecting save in the shop’s time zone; hours, notices, Instagram, and off-case catalog edits do not advance it. Older documents without that timestamp show **Case update time unavailable**. Starter data is not shown as the current case until shop data has loaded. **Connected**, **Saved view**, **Waiting for shop**, and **Offline** distinguish connection states.
 - Tap a flavor to open its story, dietary/flavor tags, availability labels, favorite control, and **Notify me** action.
 
 ### Flavor library and favorites
 
-- Browse the full catalog received from the live shop document, including flavors not currently in the freezer.
+- Browse active flavors received from the live shop document, including flavors not currently in the freezer. Archived flavors remain in saved Favorites with an Archived label, so they can still be removed or restored later.
 - Search by flavor name, description, or tags. Combine **In the freezer** and **Dairy-free** filters, including within Favorites.
 - Each library card retains its scoop color and description and indicates whether the flavor is currently in the freezer.
 - Heart or unheart a flavor from its library card or detail sheet. Favorites persist across app launches on that device/browser.
@@ -73,13 +73,19 @@ Swaps check the current server state before saving. If another staff member has 
 
 ### Maintain today’s availability
 
-Inside a pan’s sheet, staff can toggle **Pints available** and **Running low** for its flavor. These labels appear in customer cards and details; Manager also shows compact stock indicators.
+Inside a pan’s sheet, staff can toggle **Pints available**, **Running low**, and **Sold out / empty pan** for its flavor. These labels appear in customer cards and details; Manager also shows compact stock indicators.
 
-Labels expire at shop midnight. Replacing a pan clears its running-low flag. These are manual labels, not inventory counts or automatic stock detection.
+Pints and running-low labels expire at shop midnight. Sold out remains until staff uncheck it after restocking or replace the pan. Sold-out pans retain their slot and flavor ID, suppress running-low/Just out claims, and allow separate pint availability. Replacing a pan clears its running-low and sold-out flags; undo can restore the previous flags. These are manual labels, not inventory counts or automatic stock detection.
 
 ### Add a flavor
 
 The **Add flavor** form accepts a name, short note, scoop color, and dairy-free choice. The app creates a flavor ID and adds the flavor to the alphabetical catalog, ready to be selected for a pan. A new flavor uses its note as its initial story. No image upload is needed.
+
+### Edit, archive, and restore flavors
+
+**Manage flavors** opens a searchable catalog, including archived entries. Select a flavor to edit its name, short note, story, tags, or dairy-free flag. IDs and saved favorites are preserved. Saves update only edited fields; a newer staff edit to the same field is rejected for review. Failed saves keep the draft.
+
+Adding or renaming to an existing name (ignoring case and repeated spaces) shows a warning and requires explicit confirmation that it is a different flavor. Existing duplicates are not automatically changed. **Archive flavor** requires confirmation and is blocked while that flavor occupies a pan; **Restore flavor** returns the same ID to the catalog and swap choices. Archiving does not free space under the 500-entry catalog limit.
 
 ### Preview and post notices
 
@@ -171,6 +177,7 @@ Firebase project `janarty-s`, Firestore document `shop/live`, is the shared sour
 | --- | --- |
 | `catalog` | Flavor IDs, names, descriptions/stories, scoop colors, dietary flags, and tags. |
 | `caseIds` | Ordered IDs for the eight active pans. |
+| `caseUpdatedAt` | Optional timestamp for swaps, undo, pan availability, and edits to flavors currently in the case. Missing legacy values remain unknown until a case-affecting save. |
 | `updatedAt` | Latest confirmed shop update: case/catalog, availability, notice, hours (including clear), or Instagram (including reset). |
 | `lastSwap` | Latest swap or undo, including information needed for a guarded undo. |
 | `lastNotice` | Latest shop announcement and its timestamp. |
@@ -299,7 +306,7 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 
 - The app supports flavor discovery and shop updates. Ordering, checkout, payments, reservations, loyalty rewards, and automated inventory are not implemented.
 - Customer favorites/preferences are device-local. There is no customer login or cloud backup/sync for favorites.
-- The current catalog UI supports browsing and adding flavors; editing/deleting existing catalog entries is not exposed in Manager.
+- Manager supports editing and reversible archiving/restoring; permanent deletion and automatic duplicate cleanup are not provided. Existing live duplicates await owner review.
 - Native push activation and physical-iPhone delivery verification remain outstanding. Browser push notifications are not implemented.
 - Instagram's optional automatic feed is prepared, not deployed or connected. [INSTAGRAM.md](INSTAGRAM.md) documents owner authorization, the separate Cloudflare Worker/KV setup, free-tier limits, and activation gates. It requires no Firebase billing upgrade and does not write `shop/live`.
 - The iOS project supports iPhone and iPad. An Android native project is not included.
