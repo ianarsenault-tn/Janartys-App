@@ -16,6 +16,7 @@ import {
   STORAGE_KEY,
 } from "./data.js";
 import { db } from "./firebase.js";
+import { addDays, dateLabel, normalizeSchedule, scheduledHoursPatch, SCHEDULE_DAYS } from "./hours-schedule.js";
 
 const listeners = new Set();
 
@@ -97,6 +98,7 @@ function seedState() {
     lastNotice: null,
     instagram: cloneInstagram(SEED_INSTAGRAM),
     hoursOverride: null,
+    scheduledHours: {},
     availability: {},
   };
 }
@@ -123,6 +125,7 @@ function load() {
         ? cloneInstagram(parsed.instagram)
         : cloneInstagram(SEED_INSTAGRAM),
       hoursOverride: parsed.hoursOverride ?? null,
+      scheduledHours: normalizeSchedule(parsed.scheduledHours),
       availability: parsed.availability || {},
     };
   } catch {
@@ -161,6 +164,7 @@ function applyRemote(data) {
       ? cloneInstagram(data.instagram)
       : cloneInstagram(SEED_INSTAGRAM),
     hoursOverride: data.hoursOverride ?? null,
+    scheduledHours: normalizeSchedule(data.scheduledHours),
     availability: data.availability || {},
   };
   persist();
@@ -314,8 +318,9 @@ export function formatClock(hhmm) {
 
 function activeOverride(clock) {
   const o = state.hoursOverride;
-  if (!o || o.date !== clock.date) return null;
-  return o;
+  if (o?.date === clock.date) return o;
+  const planned = state.scheduledHours[clock.date];
+  return planned ? { ...planned, date: clock.date } : null;
 }
 
 function windowFor(clock) {
@@ -337,17 +342,13 @@ function windowFor(clock) {
 }
 
 function nextOpen(clock) {
-  const today = windowFor(clock);
-  if (!today.closed && clock.minutes < parseMinutes(today.open)) {
-    return { weekday: clock.weekday, open: today.open, today: true };
+  for (let i = 0; i <= SCHEDULE_DAYS + 7; i++) {
+    const date = addDays(clock.date, i), weekday = (clock.weekday + i) % 7;
+    const win = windowFor({ ...clock, date, weekday });
+    if (win.closed || (i === 0 && clock.minutes >= parseMinutes(win.open))) continue;
+    return { weekday, date, open: win.open, today: i === 0, daysAway: i };
   }
-  for (let i = 1; i < 8; i++) {
-    const day = (clock.weekday + i) % 7;
-    const hours = SEED_HOURS[day];
-    if (!hours) continue;
-    return { weekday: day, open: hours[0], today: false };
-  }
-  return { weekday: 3, open: "11:30", today: false };
+  return null;
 }
 
 export function getHoursOverride(date = new Date()) {
@@ -399,7 +400,8 @@ export function getShopStatus(nowDate = new Date()) {
   }
 
   const next = nextOpen(clock);
-  const when = next.today ? "today" : DAY_NAMES[next.weekday];
+  if (!next) return { open: false, label: "Closed · check hours", headline: "Closed", sub: "Check hours", detail, todayLine };
+  const when = next.today ? "today" : next.daysAway >= 7 ? dateLabel(next.date) : DAY_NAMES[next.weekday];
   return {
     open: false,
     label: `Closed · opens ${when} ${formatClock(next.open)}`,
@@ -416,7 +418,19 @@ export async function setHoursOverride(override) {
 }
 
 export async function clearHoursOverride() {
-  await setHoursOverride(null);
+  await changeLive(current => {
+    const scheduledHours = normalizeSchedule(current.scheduledHours);
+    const today = chicagoDate();
+    const hadException = today in scheduledHours;
+    delete scheduledHours[today];
+    return { hoursOverride: null, updatedAt: Date.now(), ...(hadException ? { scheduledHours } : {}) };
+  });
+}
+
+export function getScheduledHours() { return { ...state.scheduledHours }; }
+
+export async function saveScheduledHours(date, entry, expected = null, expectedOverride = null) {
+  await changeLive(current => scheduledHoursPatch(current, date, entry, expected, chicagoDate(), Date.now(), expectedOverride));
 }
 
 async function changeLive(makePatch) {
@@ -578,6 +592,7 @@ window.addEventListener("storage", (e) => {
         ? cloneInstagram(parsed.instagram)
         : cloneInstagram(SEED_INSTAGRAM),
       hoursOverride: parsed.hoursOverride ?? null,
+      scheduledHours: normalizeSchedule(parsed.scheduledHours),
       availability: parsed.availability || {},
     };
     emit();

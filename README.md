@@ -304,6 +304,9 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 
 ## Current scope and limitations
 
+- Manager's **Plan special hours** schedules dated closures or opening/closing times in America/Chicago, up to one year ahead (60 upcoming exceptions). Today's quick controls take priority; saving today's dated hours replaces that override, and **Follow normal hours** clears today's exception. Saves wait for Firestore acknowledgment and protect against concurrent edits. Future exceptions appear in the customer hours sheet.
+- **About, help & privacy** is available from customer screens and Manager, including before sign-in. It explains device-local favorites and provides support contacts, the app content version from `package.json`, and the privacy policy. `privacy.html` is a standalone, JavaScript-free policy page built from the same copy as the in-app sheet (`src/privacy-content.js`). Review that copy with the owners before using its deployed URL in App Store metadata, and update it when data practices change.
+
 - The app supports flavor discovery and shop updates. Ordering, checkout, payments, reservations, loyalty rewards, and automated inventory are not implemented.
 - Customer favorites/preferences are device-local. There is no customer login or cloud backup/sync for favorites.
 - Manager supports editing and reversible archiving/restoring; permanent deletion and automatic duplicate cleanup are not provided. Existing live duplicates await owner review.
