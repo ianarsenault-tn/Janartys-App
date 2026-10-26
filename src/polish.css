@@ -48,6 +48,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--purple); outlin
 @keyframes frostIn { from { filter: blur(0); } to { filter: blur(4px); } }
 @keyframes frostOut { from { filter: blur(4px); } to { filter: blur(0); } }
 .sheet {
+  /* Use the available window above the drawer, leaving room for the status area. */
+  max-height: calc(100% - 12px - env(safe-area-inset-top));
   overflow-y: auto;
   overscroll-behavior: contain;
   animation: sheetUp 300ms cubic-bezier(0.22, 0.8, 0.2, 1);

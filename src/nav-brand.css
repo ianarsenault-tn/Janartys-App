@@ -60,6 +60,11 @@
   line-height: 1.2;
   text-align: right;
 }
+/* Home Screen iOS can soften content just below the status-bar edge.
+   Keep the logo clear of that edge without changing the drawer backdrop. */
+@media (display-mode: standalone) and (max-width: 699px) {
+  .nav.brand { padding-top: calc(28px + env(safe-area-inset-top)); }
+}
 @media (max-width: 360px) {
   .nav.brand { gap: 8px; padding-left: 16px; padding-right: 16px; }
   .nav.brand .nav-title { font-size: 19px; }
