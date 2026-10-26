@@ -7,10 +7,20 @@
   "observability": { "enabled": false },
   "vars": {
     "INSTAGRAM_ENABLED": "false",
+    "INSTAGRAM_CONNECT_ENABLED": "false",
+    "INSTAGRAM_CLIENT_ID": "",
+    "INSTAGRAM_REDIRECT_URI": "",
+    "FIREBASE_PROJECT_ID": "janarty-s",
     "INSTAGRAM_USER_ID": "",
     "INSTAGRAM_API_VERSION": ""
   },
   "triggers": { "crons": [] },
+  "ratelimits": [
+    { "name": "CONNECT_RATE_LIMITER", "namespace_id": "2026102601", "simple": { "limit": 60, "period": 60 } }
+  ],
+  "d1_databases": [
+    { "binding": "OAUTH_DB", "database_name": "janartys-instagram-oauth", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
   "kv_namespaces": [
     { "binding": "FEED", "id": "00000000000000000000000000000000" }
   ]

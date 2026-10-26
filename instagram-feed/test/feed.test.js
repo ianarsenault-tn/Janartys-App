@@ -26,6 +26,9 @@ function fixture() {
 test("checked-in configuration cannot connect or schedule itself", async () => {
   const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
   assert.equal(config.vars.INSTAGRAM_ENABLED, "false");
+  assert.equal(config.vars.INSTAGRAM_CONNECT_ENABLED, "false");
+  assert.equal(config.vars.INSTAGRAM_CLIENT_ID, "");
+  assert.equal(config.vars.INSTAGRAM_REDIRECT_URI, "");
   assert.equal(config.vars.INSTAGRAM_USER_ID, "");
   assert.equal(config.vars.INSTAGRAM_API_VERSION, "");
   assert.deepEqual(config.triggers.crons, []);

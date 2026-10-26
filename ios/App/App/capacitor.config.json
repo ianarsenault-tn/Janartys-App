@@ -3,6 +3,7 @@
 	"appName": "Janarty's",
 	"webDir": "dist",
 	"includePlugins": [
+		"@capacitor/browser",
 		"@capacitor/haptics",
 		"@capacitor/splash-screen",
 		"@capacitor/status-bar"
@@ -44,6 +45,7 @@
 		}
 	},
 	"packageClassList": [
+		"CAPBrowserPlugin",
 		"HapticsPlugin",
 		"SplashScreenPlugin",
 		"StatusBarPlugin"

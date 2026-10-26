@@ -3,6 +3,48 @@ import test from "node:test";
 import { SEED_CATALOG, SEED_CASE, SEED_INSTAGRAM, STAFF_SESSION_KEY, STORAGE_KEY } from "../src/data.js";
 import { copy, deferred, failure, fixture, managerHarness, settle } from "./helpers/manager-harness.js";
 
+test("Manager exposes disabled Connect Instagram with a setup explanation and keeps manual editing", async () => {
+  let requests = 0;
+  const h = await managerHarness({ fetchFeed: () => { requests++; } });
+  assert.match(h.root.innerHTML, /data-act="ig-connect" disabled>Connect Instagram/);
+  assert.match(h.root.innerHTML, /connection setup is not ready yet/);
+  assert.match(h.root.innerHTML, /data-act="ig-save"/);
+  await h.click("ig-connect");
+  assert.equal(requests, 0);
+  await h.click("go-case");
+  assert.doesNotMatch(h.root.innerHTML, /data-act="ig-connect"/);
+});
+
+test("checking connection status preserves unsaved Manager text and never writes shop data", async () => {
+  const h = await managerHarness({ instagramConnectUrl: "https://feed.test", fetchFeed: async () => Response.json({ connected: true, feedEnabled: false }) });
+  await h.input("ig-caption", "Keep this draft");
+  const panel = { innerHTML: "" };
+  h.root.querySelector = selector => selector === "[data-ig-connection]" ? panel : null;
+  await h.click("ig-check");
+  assert.match(panel.innerHTML, /Connected to @janartys/);
+  assert.equal(h.backend.writes.length, 0);
+  await h.submit("ig-form");
+  assert.equal(h.backend.remote.instagram.caption, "Keep this draft");
+});
+
+test("Manager Connect opens the authorized service in a new tab and leaves drafts intact", async () => {
+  const started = [], opened = [];
+  const h = await managerHarness({ instagramConnectUrl: "https://feed.test", fetchFeed: async (url, options) => {
+    assert.equal(options.headers.Authorization, "Bearer mock-staff-token");
+    if (url.endsWith("/status")) return Response.json({ connected: false, feedEnabled: false });
+    started.push(url);
+    return Response.json({ url: `https://feed.test/connect/authorize?ticket=${"a".repeat(64)}` });
+  } });
+  h.window.open = () => ({ opener: "original", location: { replace: url => opened.push(url) }, close() {} });
+  await h.input("ig-caption", "Draft before connecting");
+  await h.click("ig-connect");
+  assert.deepEqual(started, ["https://feed.test/connect/start"]);
+  assert.equal(opened.length, 1);
+  assert.equal(h.backend.writes.length, 0);
+  await h.submit("ig-form");
+  assert.equal(h.backend.remote.instagram.caption, "Draft before connecting");
+});
+
 test("automatic Instagram renders safely, manual save overrides it, and reset resumes it", async () => {
   const post = { imageUrl: "https://cdn.example/new.jpg", caption: "Latest <scoop>", permalink: "https://www.instagram.com/p/latest/", handle: "janartys", fetchedAt: Date.now() };
   const h = await managerHarness({ instagramUrl: "https://feed.example/latest", fetchFeed: async () => Response.json(post) });
