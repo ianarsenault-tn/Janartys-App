@@ -97,3 +97,11 @@ Manager supports optional `catalog[].archived`, `availability[id].soldOut`, and 
 `caseUpdatedAt` advances only on swaps, undo, pan stock changes, and edits to a flavor occupying a pan. Older documents show an unknown case-update time rather than borrowing the general `updatedAt`. The local cache records `caseLoaded` after loading a valid shop snapshot; this marker is not written to Firestore. Older unmarked local caches require a shop snapshot before showing current pans. Older app versions do not maintain or display the new fields, so staff should reload the app before using these controls.
 
 Archiving preserves the entry and ID, hides it from ordinary browsing/swap choices, and keeps saved favorites. It is blocked for occupied pans. Sold-out status persists past midnight until staff restock or replace the pan. This implementation does not change the live catalog or resolve existing duplicate entries; that remains pending Marty’s confirmation.
+
+## Optional dated hours
+
+`shop/live.scheduledHours` maps Chicago calendar dates (`YYYY-MM-DD`) to `{ closed: true }` or `{ closed: false, open: 'HH:mm', close: 'HH:mm' }`. Missing maps preserve existing weekly hours. App validation permits today through 366 days ahead, at most 60 upcoming exceptions, and same-day opening times before closing times. Expired entries are ignored for display and pruned only during an explicit scheduled-hours save.
+
+Transactions preserve other dates and reject a stale draft if the selected date changed remotely. Today's quick `hoursOverride` takes priority; saving today's dated entry clears the captured quick override, rejecting the save if that override changed meanwhile. **Follow normal hours** removes today's scheduled entry and quick override while retaining future dates. These writes update `updatedAt`, not `caseUpdatedAt`, and do not edit the catalog or send notifications.
+
+Existing deployed rules allow this optional field; no migration or rules deployment is required. The app validates date/time contents; the rules continue to enforce staff authorization and the existing live-document shape, rather than the new per-date limits. Emulator tests cover authorized staff writes and anonymous denial. Opening the planner or loading the new app does not write this field.

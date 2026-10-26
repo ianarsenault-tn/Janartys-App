@@ -29,6 +29,9 @@ import { tapFeedback } from "./feedback.js";
 import { fitFlavorNames, setupFlavorNameFitting } from "./flavor-name-fit.js";
 import { getCustomer, subscribeCustomer, toggleFavorite, setAlertPreference, customerStorageAvailable } from "./customer-store.js";
 import { customerNav, libraryHtml, alertsHtml, favoriteButton, availabilityChips, flavorLocation } from "./customer-ui.js";
+import { aboutButton, aboutSheet } from "./about-ui.js";
+import { scheduleSheet, scheduledHoursList } from "./hours-ui.js";
+import { addDays } from "./hours-schedule.js";
 import { catalogSheet, editSheet, duplicateWarning } from "./catalog-ui.js";
 import { availabilityFor, canUndoSwap } from "./case-actions.js";
 import { enableNotifications, disableNotifications, initializeNotifications, notificationStatus, subscribeNotifications, publishShopEvent } from "./notifications.js";
@@ -43,6 +46,8 @@ import {
   flavorById,
   formatClock,
   getHoursOverride,
+  getScheduledHours,
+  saveScheduledHours,
   getInstagram,
   getShopStatus,
   getState,
@@ -147,6 +152,7 @@ const ui = {
   signOutBusy: false,
   toast: null, // { kind, html, sub }
   add: { name: "", note: "", dairyFree: false, color: "#A948A6" },
+  schedule: null,
   catalogSearch: "",
   edit: null,
   ig: null, // { imageUrl, caption, permalink } draft in Manager
@@ -181,6 +187,16 @@ function esc(s) {
     .replaceAll('"', "&quot;");
 }
 
+function scheduleDraft(date = addDays(chicagoDate(), 1)) {
+  const original = getScheduledHours()[date] || null;
+  return { date, closed: original?.closed ?? true, open: original?.open || "11:30", close: original?.close || "21:00", original,
+    originalOverride: getState().hoursOverride || null };
+}
+
+function infoSheet() {
+  return ["about", "privacy"].includes(ui.sheet) ? aboutSheet(ui.sheet === "privacy", sheetControls()) : "";
+}
+
 function closeAtValue() {
   const o = getHoursOverride();
   if (o && !o.closed && o.close) return o.close;
@@ -204,7 +220,7 @@ async function applyClosingAt(hhmm) {
   await staffOperation(() => setHoursOverride({
     date: chicagoDate(),
     closed: false,
-    open: "11:30",
+    open: o && !o.closed && o.open ? o.open : "11:30",
     close,
     mode: "close-at",
   }), () => {
@@ -345,7 +361,7 @@ function dismissSheet() {
   const sheet = root.querySelector(".sheet");
   const veil = root.querySelector(".veil");
   const finish = () => {
-    if (location.hash.startsWith("#/flavor/")) history.replaceState(null, "", "#/");
+    if (location.hash.startsWith("#/flavor/") || ["#/about", "#/privacy"].includes(location.hash)) history.replaceState(null, "", "#/");
     ui.sheet = null;
     ui.selectedPan = null;
     ui.pickId = null;
@@ -399,7 +415,9 @@ function goCustomer(view) {
 
 function routeCustomer() {
   const route = location.hash.replace(/^#\/?/, "");
-  if (route.startsWith("flavor/")) {
+  if (["about", "privacy"].includes(route)) {
+    ui.view = "case"; ui.sheet = route; ui.storyId = null; render();
+  } else if (route.startsWith("flavor/")) {
     ui.view = "case";
     try { ui.storyId = decodeURIComponent(route.slice(7)); } catch { ui.storyId = null; }
     ui.sheet = ui.storyId && flavorById(ui.storyId) ? "story" : null;
@@ -451,6 +469,7 @@ async function signOutToUnlock(message) {
     ui.ig = null;
     ui.add = { name: "", note: "", dairyFree: false, color: "#A948A6" };
     ui.notice = "";
+    ui.schedule = null;
     goStaff(message);
   } catch {
     ui.operationMessage = "Couldn’t sign out. Your session is still open. Try Log out again.";
@@ -554,6 +573,7 @@ function renderHoursSheet() {
       <div class="sheet-title">When we’re here</div>
       <p class="story-body">${esc(HOURS_BLURB)}</p>
       <p class="hours-today">${esc(status.todayLine)}</p>
+      ${scheduledHoursList(getScheduledHours(), chicagoDate(), formatClock)}
       <div class="hours-visit-label">Call</div>
       <div class="maps-list">
         <a class="maps-row" href="tel:${esc(SHOP_PHONE_TEL)}">615-918-0085</a>
@@ -622,7 +642,7 @@ function renderCase() {
     })
     .join("");
 
-  let sheet = "";
+  let sheet = infoSheet();
   if (ui.sheet === "story") sheet = renderStorySheet();
   if (ui.sheet === "hours") sheet = renderHoursSheet();
   if (ui.sheet === "maps") sheet = renderMapsSheet();
@@ -661,6 +681,7 @@ function renderCase() {
       <div class="case ${!caseIntroduced ? "case-enter" : ""}">${cards || `<p class="empty-cat" role="status">Current flavors haven’t loaded yet. Please reconnect to see what’s out.</p>`}</div>
       <span class="sr-only" role="status">${arrival ? `${esc(fresh.inName || flavorById(fresh.inId)?.name || "A new flavor")} just came out` : ""}</span>
       ${igCardHtml()}
+      ${aboutButton()}
     </div>
     ${customerNav("case")}
     ${sheet}
@@ -671,7 +692,7 @@ function renderCase() {
 }
 
 function renderCustomerCollection() {
-  root.innerHTML = `<div class="screen collection-screen ${ui.view}-screen">${ui.view === "alerts" ? alertsHtml(getCustomer(), notificationStatus()) : libraryHtml(getState(), getCustomer(), ui)}${!customerStorageAvailable() ? '<p class="staff-message">Device storage is unavailable. Favorites will last until you close this app.</p>' : ""}</div>${customerNav(ui.view)}${ui.sheet === "story" ? renderStorySheet() : ""}`;
+  root.innerHTML = `<div class="screen collection-screen ${ui.view}-screen">${ui.view === "alerts" ? alertsHtml(getCustomer(), notificationStatus()) : libraryHtml(getState(), getCustomer(), ui)}${!customerStorageAvailable() ? '<p class="staff-message">Device storage is unavailable. Favorites will last until you close this app.</p>' : ""}${aboutButton()}</div>${customerNav(ui.view)}${ui.sheet === "story" ? renderStorySheet() : infoSheet()}`;
 }
 
 function renderNoticePreview() {
@@ -715,7 +736,9 @@ function renderLogin() {
           Forgot password?
         </button>
       </form>
+      ${aboutButton()}
     </div>
+    ${infoSheet()}
   `;
 }
 
@@ -842,9 +865,10 @@ function renderManager() {
     })
     .join("");
 
-  let sheet = "";
+  let sheet = infoSheet();
   if (ui.sheet === "swap") sheet = renderSwapSheet();
   if (ui.sheet === "add") sheet = renderAddSheet();
+  if (ui.sheet === "schedule" && ui.schedule) sheet = scheduleSheet(getScheduledHours(), ui.schedule, chicagoDate(), ui.operationBusy, ui.operationMessage, sheetControls(), formatClock);
   if (ui.sheet === "catalog") sheet = catalogSheet(getState(), ui, sheetControls());
   if (ui.sheet === "edit" && ui.edit) sheet = editSheet(getState(), ui, sheetControls());
   if (ui.sheet === "notice-preview") sheet = renderNoticePreview();
@@ -881,6 +905,7 @@ function renderManager() {
             <input class="hours-close-time" type="time" data-act="hours-close-at" value="${esc(closeAtValue())}" aria-label="Closing time" />
           </label>
         </div>
+        <button class="ghost-btn" type="button" data-act="open-schedule">Plan special hours</button>
       </section>
       <section class="ig-mgr notice-mgr" aria-label="Tell customers">
         <div class="ig-mgr-kicker">Tell customers</div>
@@ -923,6 +948,7 @@ function renderManager() {
           </div>
         </form>
       </section>
+      ${aboutButton()}
       <div class="mgr-logout">
         <button class="ghost-btn mgr-logout-btn" type="button" data-act="staff-logout" ${ui.signOutBusy ? "disabled" : ""}>${ui.signOutBusy ? "Signing out…" : "Log out"}</button>
       </div>
@@ -943,7 +969,7 @@ function render() {
   const focusKey = focusedControl ? { act: focusedControl.dataset.act, id: focusedControl.dataset.id, slot: focusedControl.dataset.slot, label: focusedControl.getAttribute("aria-label") } : null;
   const restoreSearch =
     focus && focus.getAttribute && ["search", "library-search", "catalog-search"].includes(focus.getAttribute("data-act"));
-  const restoreAdd = focus && focus.getAttribute && /^(add|edit)-/.test(focus.getAttribute("data-act") || "");
+  const restoreAdd = focus && focus.getAttribute && /^(add|edit|schedule)-/.test(focus.getAttribute("data-act") || "");
   const restoreIg = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("ig-");
   const restoreNotice = focus && focus.getAttribute && (focus.getAttribute("data-act") || "").startsWith("notice-");
   const restorePass = focus && focus.getAttribute && focus.getAttribute("data-act") === "staff-pass";
@@ -1142,6 +1168,12 @@ root.addEventListener("click", async (e) => {
     else if (act === "ig-check") await instagramConnection.refresh();
     return;
   }
+  if (["open-about", "open-privacy", "back-about"].includes(act)) {
+    e.preventDefault();
+    if (act === "open-about") sheetOpener = { act };
+    ui.sheet = act === "open-privacy" ? "privacy" : "about";
+    render(); return;
+  }
   if (act === "customer-tab") { goCustomer(t.dataset.id); return; }
   if (act === "favorite") { toggleFavorite(t.dataset.id); void tapFeedback(); return; }
   if (act === "filter-case") { ui.inCaseOnly = !ui.inCaseOnly; render(); return; }
@@ -1168,7 +1200,7 @@ root.addEventListener("click", async (e) => {
     });
     return;
   }
-  if (["open-story", "open-hours", "open-maps", "tap-pan", "open-add", "manage-flavors"].includes(act)) {
+  if (["open-story", "open-hours", "open-maps", "tap-pan", "open-add", "manage-flavors", "open-schedule"].includes(act)) {
     sheetOpener = { act, id: t.dataset.id, slot: t.dataset.slot };
   }
   if (act === "hours-close-at") {
@@ -1271,6 +1303,16 @@ root.addEventListener("click", async (e) => {
     });
     return;
   }
+  if (act === "open-schedule" || act === "schedule-edit") {
+    ui.schedule = scheduleDraft(act === "schedule-edit" ? t.dataset.date : undefined);
+    ui.operationMessage = ""; ui.sheet = "schedule"; render(); return;
+  }
+  if (act === "schedule-remove" && ui.schedule?.original) {
+    const draft = { ...ui.schedule };
+    await staffOperation(() => saveScheduledHours(draft.date, null, draft.original, draft.originalOverride), () => {
+      ui.schedule = scheduleDraft(draft.date); ui.operationMessage = "Exception removed. Regular hours apply on that date.";
+    }); return;
+  }
   if (act === "manage-flavors") {
     ui.catalogSearch = ""; ui.operationMessage = ""; ui.sheet = "catalog"; render(); return;
   }
@@ -1334,6 +1376,15 @@ root.addEventListener("click", async (e) => {
 
 root.addEventListener("submit", async (e) => {
   const act = e.target.getAttribute && e.target.getAttribute("data-act");
+  if (act === "schedule-form") {
+    e.preventDefault();
+    if (!ui.schedule) return;
+    const draft = { ...ui.schedule };
+    const entry = draft.closed ? { closed: true } : { closed: false, open: draft.open, close: draft.close };
+    await staffOperation(() => saveScheduledHours(draft.date, entry, draft.original, draft.originalOverride), () => {
+      ui.schedule = scheduleDraft(draft.date); ui.operationMessage = "Dated hours saved.";
+    }); return;
+  }
   if (act === "staff-form") {
     e.preventDefault();
     submitPassword();
@@ -1360,6 +1411,7 @@ root.addEventListener("submit", async (e) => {
 root.addEventListener("change", async (e) => {
   const t = e.target;
   const act = t.getAttribute && t.getAttribute("data-act");
+  if (act === "schedule-date") { ui.schedule = scheduleDraft(t.value); ui.operationMessage = ""; render(); }
   if (act === "hours-close-at") await applyClosingAt(t.value);
   if (act === "alert-preference") setAlertPreference(t.dataset.id, t.checked);
   if (act === "stock-toggle") {
@@ -1393,6 +1445,11 @@ root.addEventListener("input", (e) => {
       if (err) err.textContent = "";
       root.querySelector(".staff")?.classList.remove("shake");
     }
+  }
+  if (act?.startsWith("schedule-") && ui.schedule) {
+    if (act === "schedule-open") ui.schedule.open = t.value;
+    if (act === "schedule-close") ui.schedule.close = t.value;
+    if (act === "schedule-closed") { ui.schedule.closed = t.checked; render(); }
   }
   if (act === "catalog-search") { ui.catalogSearch = t.value; render(); }
   if (act?.startsWith("edit-") && ui.edit) {

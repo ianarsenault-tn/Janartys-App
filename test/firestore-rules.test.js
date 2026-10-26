@@ -103,6 +103,17 @@ test("only approved accounts may create a missing live board", async () => {
   }
 });
 
+test("dated hours work with existing rules while anonymous schedule writes remain denied", async () => {
+  const patch = { scheduledHours: { "2026-12-25": { closed: true }, "2026-12-24": { closed: false, open: "10:00", close: "16:00" } }, updatedAt: now };
+  await assertFails(updateDoc(live(env.unauthenticatedContext().firestore()), patch));
+  for (const identity of staff) {
+    const db = auth(...identity);
+    await assertSucceeds(updateDoc(live(db), patch));
+    assert.deepEqual((await getDoc(live(db))).data().scheduledHours, patch.scheduledHours);
+    await assertSucceeds(updateDoc(live(db), { scheduledHours: {} }));
+  }
+});
+
 test("optional case freshness, sold-out and archive fields work with existing rules and staff authorization", async () => {
   const db = auth(...staff[0]);
   const catalog = fixture().catalog.map(f => f.id === "f8" ? { ...f, archived: true } : f);
