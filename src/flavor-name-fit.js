@@ -1,7 +1,6 @@
 const context = document.createElement("canvas").getContext("2d");
 
-// Measure whole words in the actual heading font. Multiword names still wrap at
-// spaces, but a long word gets a small size adjustment instead of a stray letter.
+// Give a long word the full card width rather than shrinking the reader's text.
 export function fitFlavorNames(root) {
   if (!context) return;
   for (const title of root.querySelectorAll(".card-name")) {
@@ -18,20 +17,11 @@ export function fitFlavorNames(root) {
     title.style.removeProperty("font-size");
     const style = getComputedStyle(title);
     const base = parseFloat(style.fontSize);
-    const minimum = parseFloat(style.getPropertyValue("--flavor-name-min")) || 11;
     const spacing = parseFloat(style.letterSpacing) || 0;
     context.font = `${style.fontWeight} ${base}px ${style.fontFamily}`;
     const words = title.textContent.toLocaleUpperCase("en-US").split(/\s+/).filter(Boolean);
     const longest = Math.max(1, ...words.map(word => context.measureText(word).width + word.length * spacing));
-    const sizeForWidth = () => Math.min(base, Math.floor(base * (title.clientWidth - 1) / longest * 10) / 10);
-    let size = sizeForWidth();
-    // On the narrowest phones, use the space below the scoop before making type
-    // too small to read. The freezer's responsive grid stays intact.
-    if (size < minimum) {
-      header.classList.add("wide-name");
-      size = sizeForWidth();
-    }
-    title.style.fontSize = `${Math.max(minimum, size)}px`;
+    if (longest > title.clientWidth) header.classList.add("wide-name");
   }
 }
 

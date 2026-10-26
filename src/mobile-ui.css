@@ -1,0 +1,105 @@
+/* Shared readability rules follow the phone/tablet layouts. Keep font sizes
+   relative to the reader's default size and let controls grow with their text. */
+:root { --periwinkle: #7052c7; }
+
+.pan-num, .field-label, .swap-sub { color: var(--muted); }
+.card-chip { color: #873684; }
+.just-out { background: #873684; }
+
+.customer-nav button, .nav-kicker, .nav-updated, .nav.brand .nav-tagline,
+.nav.brand .nav-screen, .collection-kicker, .result-count, .case-meta,
+.shop-notice-label, .ig-card-label, .ig-mgr-kicker, .pan-num, .pan-stock,
+.case-chip, .stock-chip, .card .stock-chip, .card-chip, .just-out,
+.field-label, .sheet .field-label, .stock-controls legend,
+.stock-controls p, .device-note, .sheet .device-note {
+  font-size: .8125rem;
+  line-height: 1.5;
+}
+.nav.brand .nav-tagline { font-size: .75rem; letter-spacing: .08em; }
+.card-name, .pan-name { font-size: .9375rem; line-height: 1.3; }
+.card-note, .library-note, .collection-header p, .library-empty p,
+.alert-option strong, .alert-option small, .alert-status, .about-content,
+.staff-sub, .hint, .ig-mgr-sub, .shop-notice p, .story-body,
+.stock-controls label, .sheet .row-note, .sheet .check-row {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.library-copy strong, .sheet .row-name { font-size: 1rem; line-height: 1.4; }
+.swap-sub, .sheet .swap-sub, .staff-message, .filter-chips button,
+.text-button, .story-actions .favorite-button, .ghost-btn, .hours-btn,
+.nav-case, .staff-forgot, .sheet .fav { font-size: .875rem; line-height: 1.4; }
+.sheet-title, .story-head .sheet-title { font-size: 1.625rem; }
+.about-content h2 { font-size: 1.125rem; }
+.collection-header h1 { font-size: 1.75rem; }
+.status-kicker { font-size: .8125rem; }
+.status-detail, .ig-card-caption, .hours-today, .hours-addr { font-size: 1rem; line-height: 1.5; }
+
+.nav-case, .staff-forgot, .hours-btn, .sheet .fav, .text-button,
+.primary-btn, .swap-btn, .ghost-btn, .filter-chips button {
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  padding: 10px 14px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.primary-btn, .swap-btn { min-height: 52px; font-size: 1rem; }
+.text-button { display: inline-flex; align-items: center; justify-content: center; }
+.sheet .fav { flex-shrink: 0; }
+.customer-nav button { font-size: .75rem; min-width: 0; overflow-wrap: anywhere; }
+.card-chip, .just-out, .story-tag { height: auto; min-height: 24px; padding-block: 4px; }
+.story-tag { font-size: .875rem; }
+
+.field, .sheet .field, .search input, .library-search input, .hours-close-time {
+  font-size: 1rem;
+  min-height: 48px;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  line-height: 1.5;
+}
+.field, .sheet .field { padding: 12px; }
+textarea.field, .sheet textarea.field { font-size: 1rem; height: 6rem; }
+.field:focus { outline: 2px solid #873684; outline-offset: 2px; box-shadow: none; }
+
+/* Preserve whole words where possible, using more space rather than smaller
+   type. Very long words can still wrap instead of leaving the card. */
+.card-top { flex-wrap: wrap; }
+.card-name { flex: 1 1 7rem; }
+.card-name > span { display: inline-block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.card-note, .pan-name { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.pan-name { overflow-wrap: anywhere; flex-shrink: 0; }
+.pan { height: auto; min-height: 120px; padding: 12px; gap: 4px; }
+.pan-scoop { flex-shrink: 0; }
+.pan-stock { flex-wrap: wrap; }
+.ig-card-caption { display: block; -webkit-line-clamp: unset; }
+.pan-swap-tag { font-size: .75rem; }
+
+.nav, .nav.brand { flex-wrap: wrap; }
+.nav.brand .nav-copy { flex: 1 1 9rem; }
+.nav.brand .nav-title { font-size: 1.375rem; overflow-wrap: anywhere; }
+.nav.brand .nav-aside { margin-left: auto; max-width: 100%; }
+.nav-title.lg { font-size: 1.375rem; overflow-wrap: anywhere; }
+.nav-title, .sheet-title, .collection-header h1 { overflow-wrap: anywhere; }
+.mgr-actions { flex-wrap: wrap; }
+.mgr-actions .ghost-btn { flex: 1 1 9rem; }
+.ig-mgr-btns { flex-wrap: wrap; }
+.ig-mgr-btns .primary-btn { height: auto; font-size: 1rem; }
+
+/* Safari's intrinsic time-input width must not force the closing-time row
+   beyond a small phone. Both the row and dated-hours fields can stack. */
+.hours-close { max-width: 100%; flex-wrap: wrap; height: auto; }
+.hours-close-time { width: 8em; min-width: 0; flex: 1 1 8em; }
+.schedule-times { grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+.schedule-times input { width: 100%; }
+
+@media (max-width: 699px), (max-height: 500px) {
+  .pans { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); }
+  .case { grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+}
+@media (min-width: 700px) and (min-height: 501px) {
+  .nav.brand .nav-title { font-size: 2rem; }
+  .customer-nav button { font-size: .875rem; }
+  .card-name, .pan-name { font-size: 1.0625rem; }
+  .collection-header h1 { font-size: 2.125rem; }
+}
