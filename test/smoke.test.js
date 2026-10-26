@@ -2,6 +2,34 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { STAFF_IDENTITIES } from "../push-relay/src/staff-identities.js";
+import { isIosHomeScreen, setupHomeScreenChrome } from "../src/home-screen-chrome.js";
+
+test("Home Screen edge treatment accepts iOS standalone fallback and excludes browsers and native apps", () => {
+  assert.equal(isIosHomeScreen({ userAgent: "iPhone", standalone: true }), true);
+  assert.equal(isIosHomeScreen({ userAgent: "iPhone", displayMode: true }), true);
+  assert.equal(isIosHomeScreen({ platform: "MacIntel", maxTouchPoints: 5, standalone: true }), true);
+  for (const environment of [
+    { userAgent: "iPhone" },
+    { userAgent: "iPhone", standalone: true, native: true },
+    { userAgent: "Android", displayMode: true },
+    { platform: "MacIntel", maxTouchPoints: 0, displayMode: true },
+  ]) assert.equal(isIosHomeScreen(environment), false);
+});
+
+test("Home Screen edge class follows display mode without touching modal classes", () => {
+  const classes = new Set(["has-sheet"]);
+  const doc = { documentElement: { classList: { toggle: (name, enabled) => enabled ? classes.add(name) : classes.delete(name) } } };
+  let changed;
+  const mode = { matches: true, addEventListener: (_event, callback) => { changed = callback; } };
+  const win = { navigator: { userAgent: "iPhone" }, matchMedia: () => mode };
+  setupHomeScreenChrome(win, doc);
+  assert.equal(classes.has("ios-home-screen"), true);
+  mode.matches = false; changed();
+  assert.equal(classes.has("ios-home-screen"), false);
+  win.navigator.standalone = true; changed();
+  assert.equal(classes.has("ios-home-screen"), true);
+  assert.equal(classes.has("has-sheet"), true);
+});
 
 // Dynamic import compiled-ish data + staff-auth helpers via rewriting exports is awkward
 // under plain node without a bundler. Test pure logic extracted here + file invariants.
