@@ -16,5 +16,6 @@ GoogleService-Info.plist
 *service-account*.json
 firebase-debug.log*
 firestore-debug.log*
+output/playwright/
 .firebase/
 push-relay/worker-configuration.d.ts

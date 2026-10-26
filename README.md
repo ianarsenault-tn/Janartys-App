@@ -264,6 +264,8 @@ GitHub Pages publishing does not update an installed iOS binary. Native changes 
 
 ```sh
 npm test
+npx playwright install chromium webkit
+npm run test:ui
 npm run test:rules
 npm ci --prefix push-relay
 npm run check --prefix push-relay
@@ -273,6 +275,7 @@ npm run build
 
 - App tests cover the app/data structure, staff allowlist, catalog behavior, display timestamps, notice expiry, favorites/filtering/topic consent, stale-swap protection, undo, and availability expiry. `npm test` also runs `test:manager`: the actual Manager/store modules with mocked Firebase, browser layout APIs, and timers, covering logout destinations/messages, rejected and pending saves, draft retention, concurrent catalog additions, and remote seed-field precedence. This uses Node's experimental VM modules flag and never connects to the live Firebase project.
 - Firestore rules tests use a local emulator and require Java 21+. They check exact staff UID/email authorization, public read-only access, legitimate staff edits/transactions, and rejected deletion, invalid data, and unrelated document access. They never write to the live Firebase project.
+- Mobile UI regressions run in Chromium and WebKit across narrow phones, landscape, tablet, and 200% text sizing. They measure touch targets, clipping, contrast, form text, drawer blur, and focus return. Firebase is mocked and external requests are blocked; no production data or credentials are used. The Mobile UI checks PR workflow installs the browsers automatically. Physical iPhone text settings, VoiceOver, and keyboard behavior still need device validation.
 - Relay checks generate Worker types and run TypeScript validation. Relay tests cover message construction, invalid authorization/origins, duplicate prevention, failed-send handling, payload limits, and the daily send cap.
 - The September 2026 feature release also received local browser checks for the full 152-flavor catalog across 14 phone-sized portrait/landscape viewports, favorites persistence, notification choices/deep links, and staff workflows using mocked saves. These were release checks, not an automated Xcode/device test suite.
 - For future UI changes, check narrow and large phone layouts, landscape scrolling, long names, reduced motion, sheet dismissal/focus, and safe-area behavior. Validate native delivery on a real signed device when push is activated.
