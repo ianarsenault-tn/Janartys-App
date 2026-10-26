@@ -535,7 +535,7 @@ test("Add flavor uses the latest remote catalog and recalculates IDs on transact
   const retried = copy(newer);
   retried.catalog.push({ id: "rose-2", name: "Rose 2", note: "Concurrent addition" });
   h.backend.retryWith = retried;
-  const added = await h.store.addFlavor({ name: "Rose" });
+  const added = await h.store.addFlavor({ name: "Rose", allowDuplicate: true });
   assert.equal(added.id, "rose-3");
   assert.equal(h.backend.attempts.length, 2);
   assert.deepEqual(h.backend.remote.catalog.slice(0, -1), retried.catalog);

@@ -103,6 +103,18 @@ test("only approved accounts may create a missing live board", async () => {
   }
 });
 
+test("optional case freshness, sold-out and archive fields work with existing rules and staff authorization", async () => {
+  const db = auth(...staff[0]);
+  const catalog = fixture().catalog.map(f => f.id === "f8" ? { ...f, archived: true } : f);
+  const patch = { catalog, caseUpdatedAt: now, availability: { f0: { soldOut: true, pintsAvailable: false, runningLow: false, at: now } } };
+  await assertFails(updateDoc(live(env.unauthenticatedContext().firestore()), patch));
+  await assertSucceeds(updateDoc(live(db), patch));
+  const saved = (await getDoc(live(db))).data();
+  assert.equal(saved.caseUpdatedAt, now);
+  assert.equal(saved.availability.f0.soldOut, true);
+  assert.equal(saved.catalog.find(f => f.id === "f8").archived, true);
+});
+
 test("staff cannot delete the board, remove required fields, or save invalid board shapes", async () => {
   const db = auth(...staff[0]);
   await assertFails(deleteDoc(live(db)));

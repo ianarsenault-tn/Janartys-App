@@ -4,6 +4,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { availabilityFor, swapPatch, undoPatch } from "./case-actions.js";
+import { archivePatch, catalogEditPatch, checkDuplicate } from "./catalog-actions.js";
 import { safeHttpsUrl, safeImageSrc } from "./presentation.js";
 import {
   HOURS_DETAIL,
@@ -89,7 +90,9 @@ function seedState() {
       tags: Array.isArray(f.tags) ? [...f.tags] : [],
     })).sort(byFlavorName),
     caseIds: [...SEED_CASE],
-    updatedAt: Date.now(),
+    updatedAt: null,
+    caseUpdatedAt: null,
+    caseLoaded: false,
     lastSwap: null,
     lastNotice: null,
     instagram: cloneInstagram(SEED_INSTAGRAM),
@@ -111,7 +114,9 @@ function load() {
     return {
       catalog: merged.catalog,
       caseIds: parsed.caseIds,
-      updatedAt: parsed.updatedAt || Date.now(),
+      updatedAt: parsed.updatedAt || null,
+      caseUpdatedAt: parsed.caseUpdatedAt ?? null,
+      caseLoaded: parsed.caseLoaded === true,
       lastSwap: parsed.lastSwap || null,
       lastNotice: parsed.lastNotice || null,
       instagram: parsed.instagram
@@ -147,7 +152,9 @@ function applyRemote(data) {
   state = {
     catalog: merged.catalog,
     caseIds: data.caseIds,
-    updatedAt: data.updatedAt || Date.now(),
+    updatedAt: data.updatedAt || null,
+    caseUpdatedAt: data.caseUpdatedAt ?? null,
+    caseLoaded: true,
     lastSwap: data.lastSwap || null,
     lastNotice: data.lastNotice || null,
     instagram: data.instagram
@@ -181,7 +188,7 @@ function startLiveSync() {
       { includeMetadataChanges: true },
       (snap) => {
         const wasLive = syncStatus.live;
-        syncStatus.live = !snap.metadata.fromCache && !snap.metadata.hasPendingWrites;
+        syncStatus.live = snap.exists() && !snap.metadata.fromCache && !snap.metadata.hasPendingWrites;
         if (!snap.exists()) {
           if (wasLive !== syncStatus.live) emit();
           return;
@@ -189,7 +196,7 @@ function startLiveSync() {
         // Pending snapshots are local echoes, not confirmed shop state. Keeping
         // the last confirmed view avoids caching failed writes or rolling back
         // over a newer remote edit when a save is rejected.
-        if (!snap.metadata.hasPendingWrites) applyRemote(snap.data());
+        if (!snap.metadata.hasPendingWrites && !applyRemote(snap.data())) syncStatus.live = false;
         if (wasLive !== syncStatus.live) emit();
       },
       () => {
@@ -330,16 +337,14 @@ function windowFor(clock) {
 }
 
 function nextOpen(clock) {
-  for (let i = 0; i < 8; i++) {
+  const today = windowFor(clock);
+  if (!today.closed && clock.minutes < parseMinutes(today.open)) {
+    return { weekday: clock.weekday, open: today.open, today: true };
+  }
+  for (let i = 1; i < 8; i++) {
     const day = (clock.weekday + i) % 7;
     const hours = SEED_HOURS[day];
     if (!hours) continue;
-    if (i === 0) {
-      if (clock.minutes < parseMinutes(hours[0])) {
-        return { weekday: day, open: hours[0], today: true };
-      }
-      continue;
-    }
     return { weekday: day, open: hours[0], today: false };
   }
   return { weekday: 3, open: "11:30", today: false };
@@ -450,11 +455,13 @@ export async function undoLastSwap(expectedId) {
 }
 
 export async function setFlavorAvailability(id, key, enabled) {
-  if (!["pintsAvailable", "runningLow"].includes(key)) return;
+  if (!["pintsAvailable", "runningLow", "soldOut"].includes(key)) return;
   await changeLive(current => {
     if (!current.catalog.some(f => f.id === id)) throw new Error("That flavor is no longer in the catalog.");
-    if (key === "runningLow" && !current.caseIds.includes(id)) throw new Error("That flavor is no longer in the freezer.");
-    return { availability: { ...current.availability, [id]: { ...availabilityFor(current, id), [key]: enabled === true, at: Date.now() } }, updatedAt: Date.now() };
+    if (!current.caseIds.includes(id)) throw new Error("That pan changed. Close this sheet and choose it again.");
+    const stock = { ...availabilityFor(current, id), [key]: enabled === true, at: Date.now() };
+    if (stock.soldOut) stock.runningLow = false;
+    return { availability: { ...current.availability, [id]: stock }, updatedAt: stock.at, caseUpdatedAt: stock.at };
   });
 }
 
@@ -509,7 +516,7 @@ export function scoopFromHex(hex) {
   return `radial-gradient(circle at 35% 30%, ${lightenHex(deep)}, ${deep})`;
 }
 
-export async function addFlavor({ name, note, dairyFree, color }) {
+export async function addFlavor({ name, note, dairyFree, color, allowDuplicate = false }) {
   const trimmed = (name || "").trim();
   if (!trimmed) return null;
   const blurb = (note || "").trim() || "A new house flavor.";
@@ -524,13 +531,22 @@ export async function addFlavor({ name, note, dairyFree, color }) {
   };
   let added;
   await changeLive(current => {
-    if (current.catalog.length >= 500) throw new Error("The catalog is full (500 flavors). A flavor must be removed before adding another.");
+    if (current.catalog.length >= 500) throw new Error("The catalog is full (500 flavors). Ask the app administrator for help before adding another.");
+    checkDuplicate(current.catalog.map(hydrateFlavor), trimmed, null, allowDuplicate);
     added = { ...flavor, id: slugify(trimmed, current.catalog) };
     // Append to the transaction's remote catalog, preserving other staff edits
     // and recalculating the ID if Firestore retries after a concurrent addition.
     return { catalog: [...current.catalog, added], updatedAt: Date.now() };
   });
   return added;
+}
+
+export async function editFlavor(id, original, changes, allowDuplicate = false) {
+  await changeLive(current => catalogEditPatch(current, id, original, changes, allowDuplicate, Date.now(), hydrateFlavor));
+}
+
+export async function setFlavorArchived(id, archived) {
+  await changeLive(current => archivePatch(current, id, archived));
 }
 
 function byFlavorName(a, b) {
@@ -540,20 +556,22 @@ function byFlavorName(a, b) {
 export function availableForSwap(exceptSlot) {
   const inCase = new Set(state.caseIds);
   if (exceptSlot != null) inCase.delete(state.caseIds[exceptSlot]);
-  return state.catalog.filter((f) => !inCase.has(f.id)).sort(byFlavorName);
+  return state.catalog.filter((f) => !f.archived && !inCase.has(f.id)).sort(byFlavorName);
 }
 
 window.addEventListener("storage", (e) => {
   if (e.key !== STORAGE_KEY || !e.newValue) return;
   try {
     const parsed = JSON.parse(e.newValue);
-    if (!Array.isArray(parsed.catalog) || !Array.isArray(parsed.caseIds)) return;
+    if (!Array.isArray(parsed.catalog) || !Array.isArray(parsed.caseIds) || parsed.caseIds.length !== 8) return;
     const prevSwapAt = state.lastSwap?.at || 0;
     const prevNoticeAt = state.lastNotice?.at || 0;
     state = {
       catalog: parsed.catalog.map(hydrateFlavor),
       caseIds: parsed.caseIds,
-      updatedAt: parsed.updatedAt || Date.now(),
+      updatedAt: parsed.updatedAt || null,
+      caseUpdatedAt: parsed.caseUpdatedAt ?? null,
+      caseLoaded: parsed.caseLoaded === true,
       lastSwap: parsed.lastSwap || null,
       lastNotice: parsed.lastNotice || null,
       instagram: parsed.instagram

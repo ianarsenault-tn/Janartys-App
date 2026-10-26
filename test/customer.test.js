@@ -53,7 +53,7 @@ test("undo restores the exact latest swap, preserving unrelated fields and suppr
   assert.deepEqual(undoPatch({ ...state, availability: { ...state.availability, f0: laterStock } }, "swap-1", now + 1000).availability.f0, laterStock);
 });
 test("availability expires at shop midnight and running-low applies only to current pans", () => {
-  assert.deepEqual(availabilityFor(base(), "f0", now), { pintsAvailable: true, runningLow: true });
+  assert.deepEqual(availabilityFor(base(), "f0", now), { pintsAvailable: true, runningLow: true, soldOut: false });
   assert.equal(availabilityFor(base(), "f8", now).runningLow, false);
-  assert.deepEqual(availabilityFor(base(), "f0", Date.parse("2026-09-16T05:00:00Z")), { pintsAvailable: false, runningLow: false });
+  assert.deepEqual(availabilityFor(base(), "f0", Date.parse("2026-09-16T05:00:00Z")), { pintsAvailable: false, runningLow: false, soldOut: false });
 });

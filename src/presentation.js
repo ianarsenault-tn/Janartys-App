@@ -55,6 +55,12 @@ export function swapKey(swap) {
   return swap ? `${swap.at}:${swap.slot}:${swap.inId}` : "";
 }
 
-export function connectionLabel(live, online = true) {
-  return !online ? "Offline" : live ? "Connected" : "Saved view";
+export function caseUpdateLabel(state, now = Date.now()) {
+  if (!state.caseLoaded) return "Current flavors haven’t loaded yet";
+  const label = updateLabel(state.caseUpdatedAt, now);
+  return label === "Update time unavailable" ? "Case update time unavailable" : label.replace("Last updated", "Case updated");
+}
+
+export function connectionLabel(live, online = true, loaded = true) {
+  return !online ? "Offline" : live ? "Connected" : loaded ? "Saved view" : "Waiting for shop";
 }

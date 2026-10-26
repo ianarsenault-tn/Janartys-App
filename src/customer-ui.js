@@ -12,8 +12,15 @@ export function customerNav(view) {
   return `<nav class="customer-nav" aria-label="Explore Janarty’s">${[["case", "Freezer"], ["library", "Flavors"], ["favorites", "Favorites"], ["alerts", "Alerts"]].map(([id, title]) => `<button type="button" data-act="customer-tab" data-id="${id}" ${view === id ? 'aria-current="page"' : ""}>${icon(id)}<span>${title}</span></button>`).join("")}</nav>`;
 }
 export function availabilityChips(state, id) {
+  if (state.caseLoaded === false || state.catalog?.find(f => f.id === id)?.archived) return "";
   const item = availabilityFor(state, id);
-  return `${item.pintsAvailable ? '<span class="stock-chip">Pints available</span>' : ""}${item.runningLow ? '<span class="stock-chip low">Running low</span>' : ""}`;
+  return `${item.soldOut ? '<span class="stock-chip low">Sold out</span>' : ""}${item.pintsAvailable ? '<span class="stock-chip">Pints available</span>' : ""}${item.runningLow ? '<span class="stock-chip low">Running low</span>' : ""}`;
+}
+export function flavorLocation(state, f) {
+  if (f.archived) return "Archived";
+  if (state.caseLoaded === false) return "Availability not loaded";
+  if (availabilityFor(state, f.id).soldOut) return "Sold out";
+  return state.caseIds.includes(f.id) ? "In the freezer" : "Not in the freezer";
 }
 export function favoriteButton(flavor, favorites, label = false) {
   const selected = favorites.includes(flavor.id);
@@ -21,7 +28,8 @@ export function favoriteButton(flavor, favorites, label = false) {
 }
 export function libraryHtml(state, customer, ui) {
   const favoritesOnly = ui.view === "favorites";
-  const flavors = filterLibrary(state.catalog, { query: ui.librarySearch, favoritesOnly, favorites: customer.favorites, inCaseOnly: ui.inCaseOnly, caseIds: state.caseIds, dairyFree: ui.dairyFreeOnly });
+  const availableIds = state.caseLoaded === false ? [] : state.caseIds.filter(id => !availabilityFor(state, id).soldOut);
+  const flavors = filterLibrary(state.catalog, { query: ui.librarySearch, favoritesOnly, favorites: customer.favorites, inCaseOnly: ui.inCaseOnly, caseIds: availableIds, dairyFree: ui.dairyFreeOnly });
   const empty = favoritesOnly && !customer.favorites.length;
   return `<header class="collection-header"><span class="collection-kicker">Janarty’s homemade ice cream</span><h1>${favoritesOnly ? "Your favorites" : "Find your next favorite"}</h1><p>${favoritesOnly ? "A little collection of the flavors you love." : "Every flavor has a story. Find yours."}</p></header>
     <div class="library-tools">
@@ -30,7 +38,7 @@ export function libraryHtml(state, customer, ui) {
     </div>
     <p class="result-count" role="status">${flavors.length} ${flavors.length === 1 ? "flavor" : "flavors"}${ui.librarySearch || ui.inCaseOnly || ui.dairyFreeOnly ? " found" : " to explore"}</p>
     <div class="flavor-library">${flavors.map(f => `<article class="library-card">
-      <button class="library-detail" type="button" data-act="open-story" data-id="${esc(f.id)}" aria-label="${esc(f.name)} — flavor story"><span class="library-scoop" style="background:${esc(f.scoopColor)}"></span><span class="library-copy"><strong>${esc(f.name)}</strong><span class="library-note">${esc(f.note)}</span><span class="library-badges"><span class="case-chip ${state.caseIds.includes(f.id) ? "available" : ""}">${state.caseIds.includes(f.id) ? "In the freezer" : "Not in the freezer"}</span>${f.dairyFree ? '<span class="stock-chip dairy">Dairy-free</span>' : ""}${availabilityChips(state, f.id)}</span></span></button>
+      <button class="library-detail" type="button" data-act="open-story" data-id="${esc(f.id)}" aria-label="${esc(f.name)} — flavor story"><span class="library-scoop" style="background:${esc(f.scoopColor)}"></span><span class="library-copy"><strong>${esc(f.name)}</strong><span class="library-note">${esc(f.note)}</span><span class="library-badges"><span class="case-chip ${flavorLocation(state, f) === "In the freezer" ? "available" : ""}">${flavorLocation(state, f)}</span>${f.dairyFree ? '<span class="stock-chip dairy">Dairy-free</span>' : ""}${availabilityChips(state, f.id)}</span></span></button>
       ${favoriteButton(f, customer.favorites)}</article>`).join("") || `<div class="library-empty">${icon("favorites")}<h2>${empty ? "Make room for your favorites" : "No flavors found"}</h2><p>${empty ? "Tap a heart in the flavor library to save something delicious." : "Try another search or clear the filters."}</p><button type="button" class="text-button" data-act="${empty ? "customer-tab" : "clear-filters"}" data-id="library">${empty ? "Explore flavors" : "Clear filters"}</button></div>`}</div>
     <p class="device-note">Favorites are saved on this device.</p>`;
 }
