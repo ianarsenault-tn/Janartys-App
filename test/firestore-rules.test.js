@@ -152,7 +152,7 @@ test("Instagram rejects malformed maps and wrong field types", async () => {
 
 test("narrow shape checks preserve sparse catalogs, optional Instagram fields, and partial writes", async () => {
   const db = auth(...staff[0]);
-  for (const instagram of [null, {}, { imageUrl: "", caption: "", permalink: "", handle: "janartys" }, fixture().instagram]) {
+  for (const instagram of [null, {}, { imageUrl: "", caption: "", permalink: "", handle: "janartys" }, fixture().instagram, { ...fixture().instagram, source: "manual" }]) {
     await assertSucceeds(updateDoc(live(db), { instagram, catalog: [{ id: "f0", name: "Legacy flavor", color: null }] }));
     await assertSucceeds(updateDoc(live(db), { lastNotice: { id: "notice", message: "Open", at: now } }));
     await assertSucceeds(updateDoc(live(db), { hoursOverride: null }));

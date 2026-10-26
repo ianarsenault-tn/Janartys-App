@@ -1,0 +1,17 @@
+{
+  "$schema": "../push-relay/node_modules/wrangler/config-schema.json",
+  "name": "janartys-instagram-feed",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-26",
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "vars": {
+    "INSTAGRAM_ENABLED": "false",
+    "INSTAGRAM_USER_ID": "",
+    "INSTAGRAM_API_VERSION": ""
+  },
+  "triggers": { "crons": [] },
+  "kv_namespaces": [
+    { "binding": "FEED", "id": "00000000000000000000000000000000" }
+  ]
+}

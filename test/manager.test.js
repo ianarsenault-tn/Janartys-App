@@ -3,6 +3,50 @@ import test from "node:test";
 import { SEED_CATALOG, SEED_CASE, SEED_INSTAGRAM, STAFF_SESSION_KEY, STORAGE_KEY } from "../src/data.js";
 import { copy, deferred, failure, fixture, managerHarness, settle } from "./helpers/manager-harness.js";
 
+test("automatic Instagram renders safely, manual save overrides it, and reset resumes it", async () => {
+  const post = { imageUrl: "https://cdn.example/new.jpg", caption: "Latest <scoop>", permalink: "https://www.instagram.com/p/latest/", handle: "janartys", fetchedAt: Date.now() };
+  const h = await managerHarness({ instagramUrl: "https://feed.example/latest", fetchFeed: async () => Response.json(post) });
+  assert.match(h.root.innerHTML, /A saved post overrides the automatic feed/);
+  await h.click("go-case");
+  assert.match(h.root.innerHTML, /Latest &lt;scoop&gt;/);
+  assert.match(h.root.innerHTML, /https:\/\/cdn.example\/new.jpg/);
+  assert.equal(h.backend.writes.length, 0, "automatic content must never write shop/live");
+  await h.store.setInstagram({ ...SEED_INSTAGRAM, caption: "Staff-selected" });
+  assert.match(h.root.innerHTML, /Staff-selected/);
+  assert.doesNotMatch(h.root.innerHTML, /Latest &lt;scoop&gt;/);
+  assert.equal(h.store.getInstagram().source, "manual");
+  // Source survives remote/cache hydration, including a deliberately seed-valued save.
+  const restored = await managerHarness({ cache: copy(h.store.getState()), remote: null, app: false });
+  assert.equal(restored.store.getInstagram().source, "manual");
+  await h.store.resetInstagram();
+  assert.equal(h.store.getInstagram().source, undefined);
+  assert.match(h.root.innerHTML, /Latest &lt;scoop&gt;/);
+});
+
+test("automatic feed arrival preserves Manager drafts and broken images fall back to the complete default card", async () => {
+  const gate = deferred();
+  const h = await managerHarness({ instagramUrl: "https://feed.example/latest", fetchFeed: () => gate.promise });
+  await h.input("ig-caption", "Unsaved draft");
+  const post = { imageUrl: "https://cdn.example/expired.jpg", caption: "Automatic caption", permalink: "https://www.instagram.com/p/latest/", handle: "janartys", fetchedAt: Date.now() };
+  gate.resolve(Response.json(post));
+  await settle();
+  await settle();
+  await h.submit("ig-form");
+  assert.equal(h.backend.remote.instagram.caption, "Unsaved draft");
+  await h.store.resetInstagram();
+  await h.click("go-case");
+  assert.match(h.root.innerHTML, /Automatic caption/);
+  const card = { outerHTML: "" };
+  h.root.querySelector = selector => selector === ".ig-card" ? card : null;
+  await h.root.fire("error", { target: { src: post.imageUrl, hasAttribute: name => name === "data-ig-photo" } });
+  assert.doesNotMatch(card.outerHTML, /Automatic caption|expired.jpg/);
+  assert.ok(card.outerHTML.includes(SEED_INSTAGRAM.caption));
+  await h.store.setInstagram({ ...post, caption: "Manual choice using the same photo" });
+  card.outerHTML = "unchanged manual card";
+  await h.root.fire("error", { target: { src: post.imageUrl, hasAttribute: name => name === "data-ig-photo" } });
+  assert.equal(card.outerHTML, "unchanged manual card", "an image error must not loop by repeatedly replacing a manual card");
+});
+
 for (const reason of ["manual", "idle"]) {
   test(`${reason} logout reaches unlock with a persistent, neutral message`, async () => {
     const h = await managerHarness();
