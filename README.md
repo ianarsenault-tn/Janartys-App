@@ -98,7 +98,7 @@ The **Add flavor** form accepts a name, short note, scoop color, and dairy-free 
 | **Closing at** | Saves a changed closing time for today and opens a suggested notice for preview. Re-selecting the saved time does not write again. The hours change is separate from posting that notice. |
 | **Instagram** | Saves an HTTPS image URL, caption, and HTTPS post/profile link, or resets the card to its default content. Invalid URLs retain the draft and show an error; blank image/link fields use the default photo/profile. |
 
-Hours overrides apply only to their stored shop date. The Instagram card remains manual until the separate feed is authorized and activated. Once enabled, saved Manager posts override the feed and resetting resumes automatic/default content.
+Hours overrides apply only to their stored shop date. Manager includes **Connect Instagram** and connection feedback; it is visibly disabled until server setup is complete. Owners then authorize @janartys through Instagram's sign-in page. Connecting and activating the feed are separate steps. The card remains manual until activation; saved Manager posts override the feed and resetting resumes automatic/default content. See [INSTAGRAM.md](INSTAGRAM.md).
 
 ### Staff session controls
 

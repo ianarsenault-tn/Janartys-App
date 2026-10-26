@@ -43,7 +43,7 @@ function storage(initial = {}) {
 // Execute the real ES modules and event handlers. Only external services,
 // layout/focus APIs, and the clock are substituted; no production source rewrite
 // or live Firebase initialization is involved.
-export async function managerHarness({ remote = fixture(), cache, signedIn = true, app = true, instagramUrl = "", fetchFeed = async () => { throw new Error("No live network in tests"); } } = {}) {
+export async function managerHarness({ remote = fixture(), cache, signedIn = true, app = true, instagramUrl = "", instagramConnectUrl = "", fetchFeed = async () => { throw new Error("No live network in tests"); } } = {}) {
   const root = {
     ...events(), innerHTML: "", querySelector: () => null, querySelectorAll: () => [],
     classList: { toggle() {}, add() {}, remove() {} },
@@ -100,10 +100,13 @@ export async function managerHarness({ remote = fixture(), cache, signedIn = tru
   };
   const noop = () => {};
   const stubs = {
-    "instagram-config.js": { INSTAGRAM_FEED_URL: instagramUrl },
+    "@capacitor/core": { Capacitor: { isNativePlatform: () => false } },
+    "@capacitor/browser": { Browser: {} },
+    "instagram-config.js": { INSTAGRAM_FEED_URL: instagramUrl, INSTAGRAM_CONNECT_URL: instagramConnectUrl },
     "firebase/firestore": firestore,
     "firebase.js": { db: {} },
     "staff-auth.js": {
+      currentStaffUser: () => backend.signedIn ? { getIdToken: async () => "mock-staff-token" } : null,
       isStaffSignedIn: () => backend.signedIn,
       whenAuthReady: async () => {},
       signInStaff: async () => { backend.signedIn = true; },

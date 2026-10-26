@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
     "test": "node --test test/smoke.test.js test/presentation.test.js test/customer.test.js && npm run test:manager && npm run test:instagram",
-    "test:instagram": "node --test test/instagram.test.js instagram-feed/test/*.test.js",
+    "test:instagram": "node --test test/instagram.test.js test/instagram-connect.test.js instagram-feed/test/*.test.js",
     "test:manager": "node --experimental-vm-modules --test test/manager.test.js",
     "test:relay": "npm --prefix push-relay test",
     "test:rules": "firebase emulators:exec --only firestore --project demo-janartys-rules \"node --test test/firestore-rules.test.js\"",
@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@capacitor-firebase/messaging": "^8.5.1",
+    "@capacitor/browser": "^8.0.5",
     "@capacitor/core": "^8.5.1",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.2",

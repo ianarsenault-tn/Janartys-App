@@ -1,4 +1,6 @@
 import "./styles.css";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 import {
   FAVORITE_IDS,
   HOURS_BLURB,
@@ -15,9 +17,11 @@ import {
   staffAuthErrorMessage,
   staffResetMessage,
   whenAuthReady,
+  currentStaffUser,
 } from "./staff-auth.js";
 import { setupStaffIdleTimeout } from "./staff-idle.js";
-import { INSTAGRAM_FEED_URL } from "./instagram-config.js";
+import { INSTAGRAM_FEED_URL, INSTAGRAM_CONNECT_URL } from "./instagram-config.js";
+import { createInstagramConnection } from "./instagram-connect.js";
 import { createInstagramFeed, featuredInstagram, FEED_REFRESH_MS } from "./instagram-feed.js";
 import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, updateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
@@ -64,6 +68,29 @@ const instagramFeed = createInstagramFeed({
     if (card && ui.view === "case") card.outerHTML = igCardHtml();
   },
 });
+const instagramConnection = createInstagramConnection({
+  baseUrl: INSTAGRAM_CONNECT_URL,
+  getToken: async () => currentStaffUser()?.getIdToken(),
+  prepareBrowser: () => {
+    if (Capacitor.isNativePlatform()) return { open: url => Browser.open({ url }), cancel() {} };
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) throw Object.assign(new Error("Browser window unavailable"), { code: "popup-blocked" });
+    tab.opener = null;
+    return { open: async url => { tab.location.replace(url); }, cancel: () => tab.close() };
+  },
+  onChange: () => {
+    if (ui.view !== "manager") return;
+    const panel = root.querySelector("[data-ig-connection]");
+    if (panel) panel.innerHTML = instagramConnectionHtml();
+  },
+});
+
+function instagramConnectionHtml() {
+  const state = instagramConnection.state;
+  return `<p class="ig-mgr-sub" role="status">${esc(state.message)}</p><div class="ig-mgr-btns">
+    <button type="button" class="primary-btn" data-act="ig-connect" ${!state.ready || state.busy ? "disabled" : ""}>${state.connected ? "Reconnect Instagram" : "Connect Instagram"}</button>
+    ${instagramConnection.configured ? `<button type="button" class="ghost-btn" data-act="ig-check" ${state.busy ? "disabled" : ""}>Check connection</button>` : ""}</div>`;
+}
 
 
 const STAFF_FAIL_KEY = "janartys-staff-fails";
@@ -394,6 +421,7 @@ function goStaff(message = "") {
       root.querySelector("[data-act=staff-email]")?.focus();
     });
   }
+  if (ui.view === "manager") void instagramConnection.refresh();
 }
 
 async function signOutToUnlock(message) {
@@ -403,6 +431,7 @@ async function signOutToUnlock(message) {
   try {
     await signOutStaff();
     staffSession++;
+    instagramConnection.reset();
     try { sessionStorage.removeItem(STAFF_SESSION_KEY); } catch { /* optional cache */ }
     ui.email = "";
     ui.password = "";
@@ -859,6 +888,7 @@ function renderManager() {
       </section>
       <section class="ig-mgr" aria-label="Instagram">
         <div class="ig-mgr-kicker">Instagram</div>
+        <div data-ig-connection>${instagramConnectionHtml()}</div>
         <p class="ig-mgr-sub">${INSTAGRAM_FEED_URL ? "A saved post overrides the automatic feed. Reset to use the latest post, or the default when unavailable." : "Featured photo on What’s Out. Paste an image URL, caption, and post link."}</p>
         <form class="ig-form" data-act="ig-form">
           <div>
@@ -1021,6 +1051,7 @@ async function submitPassword() {
     ui.staffBusy = false;
     ui.view = "manager";
     render();
+    void instagramConnection.refresh();
   } catch (err) {
     ui.password = "";
     recordFail();
@@ -1094,6 +1125,12 @@ root.addEventListener("click", async (e) => {
   }
   const act = t.getAttribute("data-act");
   if ((ui.operationBusy || ui.signOutBusy) && ui.view === "manager" && act !== "staff-logout") return;
+  if (act === "ig-connect" || act === "ig-check") {
+    if (ui.view !== "manager" || !isStaffSignedIn()) return;
+    if (act === "ig-connect" && instagramConnection.state.ready) await instagramConnection.connect();
+    else if (act === "ig-check") await instagramConnection.refresh();
+    return;
+  }
   if (act === "customer-tab") { goCustomer(t.dataset.id); return; }
   if (act === "favorite") { toggleFavorite(t.dataset.id); void tapFeedback(); return; }
   if (act === "filter-case") { ui.inCaseOnly = !ui.inCaseOnly; render(); return; }
@@ -1436,6 +1473,7 @@ for (const event of ["online", "offline"]) window.addEventListener(event, () => 
 });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
+    if (ui.view === "manager" && isStaffSignedIn()) void instagramConnection.refresh();
     void instagramFeed.refresh();
     if (renderedDay !== chicagoDate()) render();
     refreshCaseInfo();
@@ -1474,4 +1512,9 @@ function setupNativeStatusBar() {
     .catch(() => {});
 }
 setupNativeStatusBar();
+if (Capacitor.isNativePlatform()) {
+  void Browser.addListener("browserFinished", () => {
+    if (ui.view === "manager" && isStaffSignedIn()) void instagramConnection.refresh();
+  }).catch(() => {});
+}
 

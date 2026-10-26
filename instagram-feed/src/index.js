@@ -1,13 +1,12 @@
-const GRAPH = "https://graph.instagram.com";
+import { GRAPH, metaJson, tokenFor } from "./tokens.js";
+import { connectionHandler } from "./oauth.js";
 const MAX_AGE = 24 * 60 * 60 * 1000;
-const REFRESH_AFTER = 7 * 24 * 60 * 60 * 1000;
 const PUBLIC_KEY = "latest";
-const TOKEN_KEY = "private-token";
 
 function configured(env) {
-  return env.INSTAGRAM_ENABLED === "true" && /^\d+$/.test(env.INSTAGRAM_USER_ID || "")
+  return env.INSTAGRAM_ENABLED === "true" && (!env.INSTAGRAM_USER_ID || /^\d+$/.test(env.INSTAGRAM_USER_ID))
     && /^v\d+\.\d+$/.test(env.INSTAGRAM_API_VERSION || "")
-    && Boolean(env.INSTAGRAM_ACCESS_TOKEN && env.FEED);
+    && Boolean(env.FEED);
 }
 
 function https(value) {
@@ -38,49 +37,17 @@ export function selectPost(items, now) {
   return null;
 }
 
-async function metaJson(url, token, request) {
-  const response = await request(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    redirect: "error", signal: AbortSignal.timeout(10_000),
-  });
-  // Never throw/log upstream bodies or URLs: they can contain access tokens.
-  if (!response.ok) throw new Error("Instagram request failed");
-  return response.json();
-}
-
-async function tokenFor(env, now, request) {
-  const bytes = new TextEncoder().encode(env.INSTAGRAM_ACCESS_TOKEN);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const seed = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
-  let saved = await env.FEED.get(TOKEN_KEY, "json");
-  if (!saved || saved.seed !== seed) {
-    saved = { seed, token: env.INSTAGRAM_ACCESS_TOKEN, refreshedAt: now };
-    await env.FEED.put(TOKEN_KEY, JSON.stringify(saved));
-  }
-  if (now - saved.refreshedAt >= REFRESH_AFTER) {
-    const url = new URL(`${GRAPH}/refresh_access_token`);
-    url.searchParams.set("grant_type", "ig_refresh_token");
-    url.searchParams.set("access_token", saved.token);
-    const renewed = await metaJson(url.href, null, request);
-    if (typeof renewed.access_token !== "string" || !renewed.access_token
-        || !Number.isFinite(renewed.expires_in) || renewed.expires_in <= 0) throw new Error("Token renewal failed");
-    saved = { seed, token: renewed.access_token, refreshedAt: now };
-    await env.FEED.put(TOKEN_KEY, JSON.stringify(saved));
-  }
-  return saved.token;
-}
-
 export async function syncInstagram(env, { request = fetch, now = Date.now() } = {}) {
   if (!configured(env)) return { status: "disabled" };
   try {
-    const token = await tokenFor(env, now, request);
+    const { token, userId } = await tokenFor(env, now, request);
     const base = `${GRAPH}/${env.INSTAGRAM_API_VERSION}`;
-    const profile = await metaJson(`${base}/${env.INSTAGRAM_USER_ID}?fields=user_id,username`, token, request);
-    if (String(profile.user_id) !== env.INSTAGRAM_USER_ID || profile.username?.toLowerCase() !== "janartys") {
+    const profile = await metaJson(`${base}/${userId}?fields=user_id,username`, token, request);
+    if (String(profile.user_id) !== userId || profile.username?.toLowerCase() !== "janartys") {
       throw new Error("Wrong Instagram account");
     }
     const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{media_type,media_url,thumbnail_url}";
-    const url = new URL(`${base}/${env.INSTAGRAM_USER_ID}/media`);
+    const url = new URL(`${base}/${userId}/media`);
     url.searchParams.set("fields", fields);
     url.searchParams.set("limit", "25");
     const result = await metaJson(url.href, token, request);
@@ -112,6 +79,7 @@ function json(value, status = 200) {
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (path.startsWith("/connect/")) return connectionHandler(request, env);
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
     if (path !== "/latest" && path !== "/health") return json({ error: "Not found" }, 404);
     if (!configured(env)) return path === "/health" ? json({ enabled: false, ready: false }) : json(null, 503);
