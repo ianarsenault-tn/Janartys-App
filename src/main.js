@@ -9,3 +9,6 @@ import "./staff-auth.css";
 import "./polish.css";
 import "./customer.css";
 import "./tablet.css";
+import { setupHomeScreenChrome } from "./home-screen-chrome.js";
+
+setupHomeScreenChrome();
