@@ -50,11 +50,15 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 
 ### Hours, notices, and visiting
 
-- The status card shows whether the shop is open, its closing time, or its next scheduled opening. Tap it for today’s hours and the regular schedule.
-- The configured schedule is Wednesday–Sunday, 11:30am–9pm, with Monday and Tuesday closed. Staff can override today’s schedule. Time calculations use `America/Chicago`.
+- The status card shows whether the shop is open, its closing time, or its next scheduled opening. Tap it for today’s hours, the regular schedule, and upcoming dated exceptions.
+- The configured schedule is Wednesday–Sunday, 11:30am–9pm, with Monday and Tuesday closed. Staff can override today’s schedule or plan holiday closures and special openings in advance. Time calculations use `America/Chicago`.
 - The hours sheet includes a tap-to-call link and directions through Apple Maps, Google Maps, or Waze for the configured shop address.
 - A **From the shop** banner displays the latest active notice above the freezer. Posting another notice replaces it; notices expire at midnight in the shop’s time zone.
 - The **From @janartys** card shows a staff-selected image and caption and links to the configured Instagram post/profile. An optional automatic latest-post feed is prepared but disabled pending owner approval; see [INSTAGRAM.md](INSTAGRAM.md).
+
+### About, help, and privacy
+
+**About, help & privacy** is available from customer screens and Manager, including before sign-in. It includes tappable email and phone contacts, the app content version, an explanation of device-local favorites, and the privacy policy. Only the email address and phone number are linked; the words “email” and “call” remain plain text. A standalone [privacy policy](https://ianarsenault-tn.github.io/Janartys-App/privacy.html) also works without JavaScript.
 
 ## Staff features
 
@@ -98,11 +102,14 @@ Adding or renaming to an existing name (ignoring case and repeated spaces) shows
 
 | Control | Behavior |
 | --- | --- |
-| **Follow normal hours** | Removes today’s override and returns to the configured weekly schedule. |
+| **Follow normal hours** | Removes today’s quick override and dated exception, returning to the weekly schedule while retaining future exceptions. |
+| **Plan special hours** | Schedule, edit, or remove a dated closure or special opening up to 366 days ahead, with at most 60 upcoming exceptions. |
 | **Closed today** | Marks the shop closed for the current shop date. |
 | **Open today** | Uses an 11:30am–9pm window for the current shop date. |
 | **Closing at** | Saves a changed closing time for today and opens a suggested notice for preview. Re-selecting the saved time does not write again. The hours change is separate from posting that notice. |
 | **Instagram** | Saves an HTTPS image URL, caption, and HTTPS post/profile link, or resets the card to its default content. Invalid URLs retain the draft and show an error; blank image/link fields use the default photo/profile. |
+
+Today’s quick controls take priority over a planned exception. Saving today’s dated hours replaces that quick override. Saves wait for confirmation; failed saves retain the draft, and conflicting edits require reviewing the latest hours.
 
 Hours overrides apply only to their stored shop date. Manager includes **Connect Instagram** and connection feedback; it is visibly disabled until server setup is complete. Owners then authorize @janartys through Instagram's sign-in page. Connecting and activating the feed are separate steps. The card remains manual until activation; saved Manager posts override the feed and resetting resumes automatic/default content. See [INSTAGRAM.md](INSTAGRAM.md).
 
@@ -120,6 +127,7 @@ Hours overrides apply only to their stored shop date. Manager includes **Connect
 - Phone and iPad layouts support portrait, landscape, dynamic viewport height, and safe-area insets around notches and the home indicator. Wider app windows use a tablet layout capped at 1280px.
 - Subtle card presses, freezer entrance/arrival motion, and animated detail sheets provide feedback. Supported native devices add light haptics for flavor/favorite interactions and successful swaps.
 - Sheets support close buttons, backdrop dismissal, dragging the handle down, and Escape. Keyboard focus is contained within an open sheet and restored to the triggering control where available; background content becomes inactive.
+- Phone drawers expand higher when needed and scroll for longer content. Bottom controls have clearance above the home indicator, while the background remains blurred when a drawer is open.
 - Search fields preserve focus during filtering. Controls expose labels and selected states, and status changes use accessible announcements.
 - The system’s **Reduce Motion** preference disables decorative motion and haptic feedback.
 
@@ -303,9 +311,6 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 | `test/`, `.github/workflows/pages.yml` | App tests and web deployment pipeline. |
 
 ## Current scope and limitations
-
-- Manager's **Plan special hours** schedules dated closures or opening/closing times in America/Chicago, up to one year ahead (60 upcoming exceptions). Today's quick controls take priority; saving today's dated hours replaces that override, and **Follow normal hours** clears today's exception. Saves wait for Firestore acknowledgment and protect against concurrent edits. Future exceptions appear in the customer hours sheet.
-- **About, help & privacy** is available from customer screens and Manager, including before sign-in. It explains device-local favorites and provides support contacts, the app content version from `package.json`, and the privacy policy. `privacy.html` is a standalone, JavaScript-free policy page built from the same copy as the in-app sheet (`src/privacy-content.js`). Review that copy with the owners before using its deployed URL in App Store metadata, and update it when data practices change.
 
 - The app supports flavor discovery and shop updates. Ordering, checkout, payments, reservations, loyalty rewards, and automated inventory are not implemented.
 - Customer favorites/preferences are device-local. There is no customer login or cloud backup/sync for favorites.
