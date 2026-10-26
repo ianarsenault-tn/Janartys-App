@@ -39,6 +39,15 @@ async function isolate(page) {
     const catalog = structuredClone(SEED_CATALOG);
     catalog.find(f => f.id === SEED_CASE[0]).name = 'Butterscotch';
     catalog.find(f => f.id === SEED_CASE[1]).name = 'Strawberries and Cream Chocolate Swirl';
+    // Full-size synthetic catalog: no production download or live data edits.
+    // Mixed wrapping lengths expose flex rows shrinking below their contents.
+    while (catalog.length < 152) {
+      const index = String(catalog.length).padStart(3, '0');
+      catalog.push({ ...structuredClone(catalog[0]), id: 'ui-flavor-' + index,
+        name: catalog.length % 3 ? 'Roasted Sweet Potato Marshmallow ' + index : 'W'.repeat(37) + index,
+        note: 'Brown butter ice cream with toasted marshmallow and a chocolate cookie ribbon.',
+        dairyFree: catalog.length % 5 === 0 });
+    }
     const now = Date.now();
     const remote = { catalog, caseIds: SEED_CASE, instagram: SEED_INSTAGRAM,
       availability: { [SEED_CASE[0]]: { pintsAvailable: true, runningLow: true, at: now } },
@@ -103,6 +112,60 @@ async function close(page) {
   await page.getByRole("dialog").waitFor({ state: "detached" });
 }
 
+async function checkCatalogRows(page, label, expectedCount) {
+  await checkLayout(page, label);
+  const rows = page.locator('.catalog > .row');
+  assert.equal(await rows.count(), expectedCount, `${label}: full unfiltered list`);
+  const failures = await rows.evaluateAll(elements => elements.flatMap(row => {
+    const box = row.getBoundingClientRect();
+    const copy = row.querySelector(':scope > div').getBoundingClientRect();
+    const errors = [];
+    if (copy.top < box.top - 1 || copy.bottom > box.bottom + 1) errors.push(`${row.dataset.id}: text leaves row vertically`);
+    if (copy.left < box.left - 1 || copy.right > box.right + 1 || row.scrollWidth > row.clientWidth + 2) errors.push(`${row.dataset.id}: text leaves row horizontally`);
+    const next = row.nextElementSibling?.getBoundingClientRect();
+    if (next && copy.bottom > next.top + 1) errors.push(`${row.dataset.id}: text overlaps next target`);
+    return errors;
+  }));
+  assert.deepEqual(failures, [], label);
+  assert.ok(await page.locator('.catalog').evaluate(el => el.scrollHeight > el.clientHeight), `${label}: list scrolls`);
+}
+
+async function checkFullCatalog(page, label) {
+  // Click actual rows at the beginning, middle and end, without search or
+  // forced clicks masking the neighboring-row interception regression.
+  for (const index of [0, 76, 151]) {
+    await page.getByRole('button', { name: 'Manage flavors', exact: true }).click();
+    if (index === 0) await checkCatalogRows(page, `${label} catalog`, 152);
+    const row = page.locator('.catalog > .row').nth(index);
+    const name = (await row.locator('.row-name').textContent()).split(' · ')[0];
+    await row.click();
+    assert.equal(await page.getByRole('textbox', { name: 'Name', exact: true }).inputValue(), name);
+    await close(page);
+  }
+  await page.locator('[data-act="tap-pan"]').first().click();
+  await checkCatalogRows(page, `${label} swap choices`, 144);
+  for (const index of [0, 72, 143]) {
+    const row = page.locator('.catalog > .row').nth(index);
+    const id = await row.getAttribute('data-id');
+    await row.click();
+    assert.equal(await page.locator('.catalog > .row.chosen').getAttribute('data-id'), id);
+    await checkCatalogRows(page, `${label} selected swap`, 144);
+  }
+  // Selection is local UI state; never submit the swap to Firestore.
+  await close(page);
+}
+
+async function checkManagerSpacing(page, label) {
+  const gaps = await page.evaluate(() => {
+    const distance = (first, second) => document.querySelector(second).getBoundingClientRect().top - document.querySelector(first).getBoundingClientRect().bottom;
+    return {
+      hours: distance('.hours-btns', '[data-act="open-schedule"]'),
+      instagram: distance('[data-ig-connection]', '[data-ig-connection] + .ig-mgr-sub'),
+    };
+  });
+  for (const [section, gap] of Object.entries(gaps)) assert.ok(gap >= 12, `${label} ${section} gap is ${gap}px`);
+}
+
 for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) {
   test(`${engine}: mobile readability, touch targets, contrast and text reflow`, { timeout: 180000 }, async () => {
     const server = await createServer({ server: { host: "127.0.0.1", port: 0 } });
@@ -138,6 +201,8 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
           await checkLayout(page, `${label} Manager`);
           assert.ok(await page.locator('.pan-name').evaluateAll(els => els.every(e => parseFloat(getComputedStyle(e).fontSize) >= 14 * parseFloat(getComputedStyle(document.documentElement).fontSize) / 16)), "Pan names stay readable");
           if (width === 393 && scale === 1) await checkContrast(page, "Manager");
+          await checkFullCatalog(page, label);
+          await checkManagerSpacing(page, label);
           await page.getByRole("button", { name: "Plan special hours", exact: true }).click();
           await page.getByRole("checkbox", { name: "Closed all day", exact: true }).uncheck();
           await checkLayout(page, `${label} scheduled hours`);
