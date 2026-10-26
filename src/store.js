@@ -47,6 +47,7 @@ function cloneInstagram(ig = SEED_INSTAGRAM) {
     permalink: ig.permalink,
     handle: ig.handle || SEED_INSTAGRAM.handle,
     updatedAt: ig.updatedAt || Date.now(),
+    ...(ig.source === "manual" ? { source: "manual" } : {}),
   };
 }
 
@@ -246,6 +247,7 @@ export async function setInstagram({ imageUrl, caption, permalink }) {
       permalink: nextLink,
       handle: current.instagram?.handle || SEED_INSTAGRAM.handle,
       updatedAt: Date.now(),
+      source: "manual",
     },
     updatedAt: Date.now(),
   }));

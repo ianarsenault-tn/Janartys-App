@@ -54,7 +54,7 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 - The configured schedule is Wednesday–Sunday, 11:30am–9pm, with Monday and Tuesday closed. Staff can override today’s schedule. Time calculations use `America/Chicago`.
 - The hours sheet includes a tap-to-call link and directions through Apple Maps, Google Maps, or Waze for the configured shop address.
 - A **From the shop** banner displays the latest active notice above the freezer. Posting another notice replaces it; notices expire at midnight in the shop’s time zone.
-- The **From @janartys** card shows a staff-selected image and caption and links to the configured Instagram post/profile.
+- The **From @janartys** card shows a staff-selected image and caption and links to the configured Instagram post/profile. An optional automatic latest-post feed is prepared but disabled pending owner approval; see [INSTAGRAM.md](INSTAGRAM.md).
 
 ## Staff features
 
@@ -98,7 +98,7 @@ The **Add flavor** form accepts a name, short note, scoop color, and dairy-free 
 | **Closing at** | Saves a changed closing time for today and opens a suggested notice for preview. Re-selecting the saved time does not write again. The hours change is separate from posting that notice. |
 | **Instagram** | Saves an HTTPS image URL, caption, and HTTPS post/profile link, or resets the card to its default content. Invalid URLs retain the draft and show an error; blank image/link fields use the default photo/profile. |
 
-Hours overrides apply only to their stored shop date. The Instagram card is maintained manually; it does not automatically fetch the latest Instagram post.
+Hours overrides apply only to their stored shop date. The Instagram card remains manual until the separate feed is authorized and activated. Once enabled, saved Manager posts override the feed and resetting resumes automatic/default content.
 
 ### Staff session controls
 
@@ -301,7 +301,7 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 - Customer favorites/preferences are device-local. There is no customer login or cloud backup/sync for favorites.
 - The current catalog UI supports browsing and adding flavors; editing/deleting existing catalog entries is not exposed in Manager.
 - Native push activation and physical-iPhone delivery verification remain outstanding. Browser push notifications are not implemented.
-- Instagram updates are manual. [INSTAGRAM.md](INSTAGRAM.md) contains earlier planning notes for a possible automatic integration, not a deployed service; its Cloud Function proposal would need revisiting under the current cost constraint.
+- Instagram's optional automatic feed is prepared, not deployed or connected. [INSTAGRAM.md](INSTAGRAM.md) documents owner authorization, the separate Cloudflare Worker/KV setup, free-tier limits, and activation gates. It requires no Firebase billing upgrade and does not write `shop/live`.
 - The iOS project supports iPhone and iPad. An Android native project is not included.
 
 For operational detail, use [FIRESTORE.md](FIRESTORE.md), [IOS.md](IOS.md), and [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).

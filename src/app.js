@@ -17,6 +17,8 @@ import {
   whenAuthReady,
 } from "./staff-auth.js";
 import { setupStaffIdleTimeout } from "./staff-idle.js";
+import { INSTAGRAM_FEED_URL } from "./instagram-config.js";
+import { createInstagramFeed, featuredInstagram, FEED_REFRESH_MS } from "./instagram-feed.js";
 import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, updateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
 import { tapFeedback } from "./feedback.js";
@@ -52,6 +54,16 @@ import {
 
 const root = document.querySelector("#app");
 setupFlavorNameFitting(root);
+let failedInstagramImage = "";
+const instagramFeed = createInstagramFeed({
+  url: INSTAGRAM_FEED_URL,
+  onChange: () => {
+    failedInstagramImage = "";
+    // Replace just the card; preserve scroll, open sheets, and Manager drafts.
+    const card = root.querySelector(".ig-card");
+    if (card && ui.view === "case") card.outerHTML = igCardHtml();
+  },
+});
 
 
 const STAFF_FAIL_KEY = "janartys-staff-fails";
@@ -194,7 +206,8 @@ function ensureIgDraft() {
 }
 
 function igCardHtml() {
-  const ig = getInstagram();
+  const automatic = instagramFeed.current();
+  const ig = featuredInstagram(getInstagram(), automatic?.imageUrl === failedInstagramImage ? null : automatic);
   const href = safeHref(ig.permalink);
   const handle = ig.handle || "janartys";
   const src = safeImageSrc(ig.imageUrl) || safeImageSrc(SEED_INSTAGRAM.imageUrl);
@@ -205,7 +218,7 @@ function igCardHtml() {
       <span class="ig-heart" aria-hidden="true"></span>
     </div>
     <div class="ig-card-photo">
-      <img src="${esc(src)}" alt="" />
+      <img src="${esc(src)}" alt="" data-ig-photo />
     </div>
     <p class="ig-card-caption">${esc(ig.caption)}</p>
   </a>`;
@@ -846,7 +859,7 @@ function renderManager() {
       </section>
       <section class="ig-mgr" aria-label="Instagram">
         <div class="ig-mgr-kicker">Instagram</div>
-        <p class="ig-mgr-sub">Featured photo on What’s Out. No Meta token — paste a URL for now.</p>
+        <p class="ig-mgr-sub">${INSTAGRAM_FEED_URL ? "A saved post overrides the automatic feed. Reset to use the latest post, or the default when unavailable." : "Featured photo on What’s Out. Paste an image URL, caption, and post link."}</p>
         <form class="ig-form" data-act="ig-form">
           <div>
             <label class="field-label" for="ig-image">Image URL</label>
@@ -865,7 +878,7 @@ function renderManager() {
           </div>
           <div class="ig-mgr-btns">
             <button class="primary-btn" type="submit" data-act="ig-save">Save</button>
-            <button class="ghost-btn" type="button" data-act="ig-reset">Reset to default</button>
+            <button class="ghost-btn" type="button" data-act="ig-reset">${INSTAGRAM_FEED_URL ? "Use latest post" : "Reset to default"}</button>
           </div>
         </form>
       </section>
@@ -1230,7 +1243,7 @@ root.addEventListener("click", async (e) => {
   if (act === "ig-reset") {
     await staffOperation(resetInstagram, () => {
       ui.ig = null;
-      showToast("manager", "Instagram reset", "Default post is back on What’s Out");
+      showToast("manager", "Instagram reset", INSTAGRAM_FEED_URL ? "Latest post will show when available" : "Default post is back on What’s Out");
     });
     return;
   }
@@ -1334,6 +1347,19 @@ root.addEventListener("keydown", (e) => {
   }
 });
 
+root.addEventListener("error", (event) => {
+  const automatic = instagramFeed.current();
+  if (!automatic || !event.target?.hasAttribute?.("data-ig-photo")
+      || event.target.src !== automatic.imageUrl
+      || featuredInstagram(getInstagram(), automatic) !== automatic
+      || failedInstagramImage === automatic.imageUrl) return;
+  // Instagram CDN links can expire before the next sync; fall back as a whole
+  // card so a default image never appears beside an unrelated post's caption.
+  failedInstagramImage = automatic.imageUrl;
+  const card = root.querySelector(".ig-card");
+  if (card) card.outerHTML = igCardHtml();
+}, true);
+
 subscribe(() => {
   if (location.hash.startsWith("#/flavor/") && ui.storyId && flavorById(ui.storyId)) ui.sheet = "story";
   if (ui.view === "case" && JSON.stringify(getState()) === renderedData) refreshCaseInfo();
@@ -1410,6 +1436,7 @@ for (const event of ["online", "offline"]) window.addEventListener(event, () => 
 });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
+    void instagramFeed.refresh();
     if (renderedDay !== chicagoDate()) render();
     refreshCaseInfo();
     if (ui.view === "case" && root.querySelector(".just-out") && !justOutSwap()) render();
@@ -1421,6 +1448,10 @@ window.addEventListener("janartys-open-notification", event => {
 });
 if (!isStaffRoute()) routeCustomer();
 void initializeNotifications();
+if (INSTAGRAM_FEED_URL) {
+  void instagramFeed.refresh();
+  setInterval(() => { if (!document.hidden) void instagramFeed.refresh(); }, FEED_REFRESH_MS);
+}
 
 whenAuthReady().then(() => {
   if (isStaffRoute()) goStaff();
