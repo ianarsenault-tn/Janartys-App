@@ -21,8 +21,15 @@ until its endpoint is configured and confirms readiness.
   not require a linked Facebook Page. It does not publish, read messages or
   manage comments. Customers do not sign in to Instagram.
 - Every 30 minutes after activation, it selects the newest supported recent
-  item: a photo, a Reel/video's cover, or the first image/cover in a carousel.
-  It provides an image, caption and post link, not an interactive player or Stories.
+  item: a photo, a Reel/video, or the first item in a carousel. Photos remain
+  linked image cards. Videos show a cover and **Play video** button; playback
+  starts inline only after a tap, with native pause, sound and fullscreen controls.
+  Stories and browsing multiple carousel items are not included.
+- Video URLs are loaded only after a tap, not on page load. Navigation, opening
+  a drawer, leaving the page or a refreshed/replaced card stops playback.
+  **Open in Instagram** is always available on video cards. Missing URLs,
+  playback failures (including expired CDN URLs), and a 15-second initial load
+  timeout retain the cover/caption/link and show fallback guidance.
 - `/latest` serves only cached public fields. Customer requests never call Meta.
   `/health` exposes only `enabled` and `ready`. No public sync/token routes exist.
 - Automatic content stays in a dedicated KV namespace, **not `shop/live`**.
@@ -41,8 +48,9 @@ until its endpoint is configured and confirms readiness.
 
 1. Identify who controls `@janartys`; have them available with their sign-in and
    two-factor verification method. Do not request their password.
-2. Approve showing the latest image/cover, caption and Instagram link. Confirm
-   that a cover linking to Instagram is sufficient for Reels.
+2. Confirm displaying the latest photo or tap-to-play video, caption and
+   Instagram fallback link. Verify an actual authorized Reel on an iPhone
+   (including the Home Screen app) before activation.
 3. Create/select a business-controlled Meta developer app; invite the developer
    with the needed role. Add Instagram Login and the account through Meta's
    dashboard. The owner accepts any invitation and authorizes basic media access.
@@ -128,7 +136,8 @@ Install `npm ci --prefix push-relay` before running the Instagram tests/bundle.
    errors. Verify the configured version, fields and token renewal with Meta
    during authorized activation; fixture tests do not prove live API compatibility.
 7. Set `INSTAGRAM_FEED_URL` to the Worker's HTTPS `/latest` URL in a reviewed
-   activation change. Test photos, Reels, carousel covers, fallback and override/reset.
+   activation change. Test photos, inline Reels, the first carousel item, expired
+   video/error fallback and override/reset on a real iPhone, including Home Screen mode.
    Use isolated Firestore fixtures for Manager write tests. Update privacy disclosures.
 8. Deploy Pages after review. Native release also needs `cap:sync`, a signed Xcode
    build and real-iPhone checks; Pages cannot update an installed iOS binary.
@@ -146,7 +155,9 @@ requests/day, 10 ms CPU/invocation and five cron triggers/account. KV Free
 includes 100,000 reads/day, 1,000 writes/day and 1 GB storage. A 30-minute
 schedule uses 48 runs, about 96 Meta reads and 48 public-cache writes/day, plus
 occasional token writes. Each enabled public endpoint request uses one KV read.
-There is no image proxy/video storage; images load from Instagram media URLs.
+There is no image proxy/video storage; images and tapped videos load directly
+from Instagram media URLs. Both the updated Worker and Pages build are needed
+for inline playback; an older Worker response still renders as a linked cover.
 OAuth adds a tiny D1 database (at most two current staff-session rows). D1 Free
 includes 5 million rows read/day, 100,000 rows written/day and 5 GB total storage.
 The official Capacitor Browser plugin adds no paid service. These are shared

@@ -30,6 +30,8 @@ export function selectPost(items, now) {
     if (!imageUrl || !["IMAGE", "VIDEO"].includes(media?.media_type)) continue;
     return {
       imageUrl, permalink, handle: "janartys",
+      mediaType: media.media_type,
+      ...(media.media_type === "VIDEO" && https(media.media_url) ? { videoUrl: https(media.media_url) } : {}),
       caption: typeof item.caption === "string" ? item.caption.slice(0, 2200) : "",
       publishedAt: timestamp, fetchedAt: now,
     };
@@ -89,8 +91,10 @@ export default {
       if (path === "/health") return json({ enabled: true, ready: Boolean(fresh) });
       // Only explicitly public fields leave the service, never the private KV record.
       if (!fresh) return json(null, post === null ? 200 : 503);
-      const { imageUrl, caption, permalink, handle, publishedAt, fetchedAt } = post;
-      return json({ imageUrl, caption, permalink, handle, publishedAt, fetchedAt });
+      const { imageUrl, caption, permalink, handle, publishedAt, fetchedAt, mediaType } = post;
+      const videoUrl = mediaType === "VIDEO" ? https(post.videoUrl) : null;
+      return json({ imageUrl, caption, permalink, handle, publishedAt, fetchedAt, mediaType,
+        ...(videoUrl ? { videoUrl } : {}) });
     } catch { return json(null, 503); }
   },
   async scheduled(_event, env) {

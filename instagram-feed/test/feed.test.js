@@ -53,6 +53,39 @@ test("media selection chooses the newest supported post with a video cover or fi
   assert.equal(selectPost([], 10), null);
 });
 
+test("video and first-carousel video retain playable HTTPS media without changing photo selection", () => {
+  const video = { ...photo, media_type: "VIDEO", media_url: "https://cdn.example/reel.mp4", thumbnail_url: "https://cdn.example/cover.jpg" };
+  for (const item of [video, { ...photo, media_type: "CAROUSEL_ALBUM", children: { data: [video, photo] } }]) {
+    const post = selectPost([item], 10);
+    assert.equal(post.mediaType, "VIDEO");
+    assert.equal(post.videoUrl, video.media_url);
+    assert.equal(post.imageUrl, video.thumbnail_url);
+    assert.equal(post.permalink, photo.permalink);
+  }
+  assert.equal(selectPost([photo], 10).mediaType, "IMAGE");
+  assert.equal(selectPost([photo], 10).videoUrl, undefined);
+  for (const media_url of [undefined, "javascript:bad", "http://cdn.example/video.mp4", "https://secret@cdn.example/video.mp4"]) {
+    const post = selectPost([{ ...video, media_url }], 10);
+    assert.equal(post.videoUrl, undefined);
+    assert.equal(post.mediaType, "VIDEO", "retain cover/link fallback when no safe video URL is available");
+  }
+});
+
+test("public video payload includes only safe media fields, never private token properties", async () => {
+  const h = fixture();
+  const post = { ...selectPost([photo], Date.now()), mediaType: "VIDEO", videoUrl: "https://cdn.example/video.mp4", access_token: "private-secret" };
+  h.values.set("latest", JSON.stringify(post));
+  const body = await (await worker.fetch(new Request("https://feed.test/latest"), h.env)).json();
+  assert.equal(body.videoUrl, post.videoUrl);
+  assert.equal(body.mediaType, "VIDEO");
+  assert.equal(body.access_token, undefined);
+  for (const patch of [{ videoUrl: "javascript:bad" }, { mediaType: "IMAGE" }]) {
+    h.values.set("latest", JSON.stringify({ ...post, ...patch }));
+    assert.equal((await (await worker.fetch(new Request("https://feed.test/latest"), h.env)).json()).videoUrl, undefined);
+  }
+  assert.equal(h.calls.length, 0);
+});
+
 test("sync verifies the account, reads Meta only on schedule, and exposes only public media fields", async () => {
   const h = fixture();
   assert.deepEqual(await syncInstagram(h.env, { request: h.request }), { status: "updated" });

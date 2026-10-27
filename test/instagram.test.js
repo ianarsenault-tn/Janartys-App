@@ -35,6 +35,19 @@ test("automatic cards reject unsafe links, foreign accounts, malformed or stale 
   assert.equal(validFeedPost(automatic, now), true);
 });
 
+test("video payload validation accepts covers without playback but rejects unsafe sources", () => {
+  const video = { ...automatic, mediaType: "VIDEO", videoUrl: "https://cdn.example/reel.mp4" };
+  assert.equal(validFeedPost(video, now), true);
+  assert.equal(validFeedPost({ ...automatic, mediaType: "VIDEO" }, now), true);
+  for (const patch of [
+    { mediaType: "IMAGE" }, { mediaType: "UNKNOWN" }, { mediaType: undefined },
+    { videoUrl: "javascript:alert(1)" }, { videoUrl: "data:video/mp4,test" },
+    { videoUrl: "http://cdn.example/video.mp4" }, { videoUrl: "https://secret@cdn.example/video.mp4" },
+  ]) assert.equal(validFeedPost({ ...video, ...patch }, now), false);
+  assert.equal(featuredInstagram({ ...SEED_INSTAGRAM, source: "manual" }, video, now).source, "manual");
+  assert.equal(featuredInstagram(SEED_INSTAGRAM, video, now), video);
+});
+
 test("refresh is deduplicated and throttled, retains good data on failure, clears empty feeds", async () => {
   let time = now, calls = 0, changes = 0, release;
   let response = () => new Promise(resolve => { release = resolve; });
