@@ -26,6 +26,7 @@ import { createInstagramFeed, featuredInstagram, FEED_REFRESH_MS } from "./insta
 import { setupInstagramVideo } from "./instagram-video.js";
 import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, caseUpdateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
+import { setupCustomerSwipes } from "./customer-swipes.js";
 import { tapFeedback } from "./feedback.js";
 import { fitFlavorNames, setupFlavorNameFitting } from "./flavor-name-fit.js";
 import { getCustomer, subscribeCustomer, toggleFavorite, setAlertPreference, customerStorageAvailable } from "./customer-store.js";
@@ -1579,6 +1580,7 @@ setupStaffIdleTimeout({
 });
 
 setupSheetInteractions(root, dismissSheet);
+setupCustomerSwipes(root, () => ui.view, goCustomer);
 window.addEventListener("online", refreshCaseInfo);
 window.addEventListener("offline", refreshCaseInfo);
 for (const event of ["online", "offline"]) window.addEventListener(event, () => {

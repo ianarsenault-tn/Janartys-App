@@ -41,6 +41,7 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 
 ### Flavor library and favorites
 
+- Swipe left or right between **Flavors**, **Favorites**, and **Alerts**, or use the bottom navigation. Swipes stop at either end; vertical scrolling and form controls keep their normal behavior.
 - Browse active flavors received from the live shop document, including flavors not currently in the freezer. Archived flavors remain in saved Favorites with an Archived label, so they can still be removed or restored later.
 - Search by flavor name, description, or tags. Combine **In the freezer** and **Dairy-free** filters, including within Favorites.
 - Each library card retains its scoop color and description and indicates whether the flavor is currently in the freezer.
@@ -59,6 +60,8 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 ### About, help, and privacy
 
 **About, help & privacy** is available from customer screens and Manager, including before sign-in. It includes tappable email and phone contacts, the app content version, an explanation of device-local favorites, and the privacy policy. Only the email address and phone number are linked; the words “email” and “call” remain plain text. A standalone [privacy policy](https://ianarsenault-tn.github.io/Janartys-App/privacy.html) also works without JavaScript.
+
+Drawers can be pulled down from the wide top strip around the centered dash; the separate close button and keyboard dismissal remain available. On landscape phones, What's Out arranges the eight pans in two equal rows of four, with vertical scrolling when needed.
 
 ## Staff features
 
