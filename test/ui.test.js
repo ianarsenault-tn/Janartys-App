@@ -112,9 +112,11 @@ async function close(page) {
   await page.getByRole("dialog").waitFor({ state: "detached" });
 }
 
-// Chromium exercises native touch arbitration; WebKit exercises the same
-// pointer handlers deterministically, with real mouse drags for pointer capture.
-async function touchStroke(page, engine, target, dx, dy = 0, { native = true, cancel = false, secondary = false, x } = {}) {
+// Chromium exercises native touch arbitration. WebKit's automation API only
+// exposes taps, so dispatch actual TouchEvents (not just PointerEvents) there.
+// Paired pointer events model compatibility delivery; cancellation must not
+// discard an otherwise active touch sequence or cause duplicate navigation.
+async function touchStroke(page, engine, target, dx, dy = 0, { native = true, cancel = false, secondary = false, x, pointerCancel = false, cancelable = true, verticalFirst = false, detach = false } = {}) {
   await target.scrollIntoViewIfNeeded();
   const box = await target.boundingBox();
   const start = { x: x ?? box.x + box.width * (dx < 0 ? .8 : .2), y: box.y + Math.min(box.height / 2, 50) };
@@ -126,16 +128,45 @@ async function touchStroke(page, engine, target, dx, dy = 0, { native = true, ca
       await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [] });
     } finally { await cdp.detach(); }
   } else {
-    await target.evaluate((element, { start, dx, dy, cancel, secondary }) => {
-      const dispatch = (type, x, y, extra = {}) => element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 11, pointerType: 'touch', isPrimary: true, button: 0, clientX: x, clientY: y, ...extra }));
-      dispatch('pointerdown', start.x, start.y);
-      if (secondary) dispatch('pointerdown', start.x + 10, start.y, { pointerId: 12, isPrimary: false });
-      for (let n = 1; n <= 8; n++) dispatch('pointermove', start.x + dx * n / 8, start.y + dy * n / 8);
-      dispatch(cancel ? 'pointercancel' : 'pointerup', start.x + dx, start.y + dy);
+    return target.evaluate((element, { start, dx, dy, cancel, secondary, pointerCancel, cancelable, verticalFirst, detach }) => {
+      const pointer = (type, x, y) => element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 11, pointerType: 'touch', isPrimary: true, button: 0, clientX: x, clientY: y }));
+      const touch = (x, y, identifier = 11) => ({ identifier, target: element, clientX: x, clientY: y });
+      const dispatch = (type, changed, active, canCancel = true) => {
+        // Desktop WebKit exposes TouchEvent but not its iOS constructor. Use
+        // the browser's Event cancellation/propagation with explicit touch lists.
+        const event = document.createEvent('TouchEvent');
+        event.initEvent(type, true, canCancel);
+        Object.defineProperties(event, {
+          touches: { value:active }, targetTouches: { value:active }, changedTouches: { value:changed },
+        });
+        element.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      const first = touch(start.x, start.y);
+      pointer('pointerdown', start.x, start.y);
+      const prevented = [dispatch('touchstart', [first], [first])];
+      if (secondary) dispatch('touchstart', [touch(start.x + 10, start.y, 12)], [first, touch(start.x + 10, start.y, 12)]);
+      if (verticalFirst) prevented.push(dispatch('touchmove', [touch(start.x, start.y + 20)], [touch(start.x, start.y + 20)]));
+      if (pointerCancel) {
+        pointer('pointercancel', start.x, start.y);
+        pointer('lostpointercapture', start.x, start.y);
+      }
+      for (let n = 1; n <= 8; n++) {
+        const point = touch(start.x + dx * n / 8, start.y + dy * n / 8);
+        if (!pointerCancel) pointer('pointermove', point.clientX, point.clientY);
+        prevented.push(dispatch('touchmove', [point], secondary ? [point, touch(start.x + 10, start.y, 12)] : [point], cancelable));
+      }
+      if (detach) {
+        const screen = element.closest('.collection-screen');
+        screen.replaceWith(screen.cloneNode(true));
+      }
+      if (!pointerCancel) pointer(cancel ? 'pointercancel' : 'pointerup', start.x + dx, start.y + dy);
+      prevented.push(dispatch(cancel ? 'touchcancel' : 'touchend', [touch(start.x + dx, start.y + dy)], []));
       // Real browsers can synthesize a click after a drag. Check suppression
       // against a surviving flavor-story button, not only an empty header.
       if (!cancel && !secondary && element.isConnected) element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
-    }, { start, dx, dy, cancel, secondary });
+      return prevented;
+    }, { start, dx, dy, cancel, secondary, pointerCancel, cancelable, verticalFirst, detach });
   }
 }
 
@@ -551,7 +582,7 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
           if (scale === 2) await page.addStyleTag({ content: 'html{font-size:200%}' });
           await page.getByRole('button', { name:'Flavors', exact:true }).click();
           assert.match(await page.locator('.collection-screen').evaluate(el => getComputedStyle(el).touchAction), /pan-y/);
-          await touchStroke(page, engine, header, -130); await expectView('favorites');
+          await touchStroke(page, engine, header, -130, 18); await expectView('favorites');
           await touchStroke(page, engine, header, -130); await expectView('alerts');
           await touchStroke(page, engine, header, -130); assert.equal(await current(), 'alerts', 'no wrapping at last page');
           await touchStroke(page, engine, header, 130); await expectView('favorites');
@@ -625,6 +656,50 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
           await page.screenshot({path:`output/playwright/ui-regressions/${engine}-gestures-${width}-${scale}.png`});throw error;
         } finally { await context.close(); }
       }
+    } finally { await browser?.close(); await server.close(); }
+  });
+
+  test(`${engine}: touch swipes survive pointer cancellation and preserve native gestures`, { timeout:120000 }, async () => {
+    const server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
+    let browser;
+    try {
+      await server.listen();
+      browser = await engines[engine].launch({ executablePath: process.env[`UI_${engine.toUpperCase()}_EXECUTABLE`] || undefined });
+      const page = await browser.newPage({ viewport: { width:393, height:852 }, hasTouch:true, isMobile:true });
+      await isolate(page);
+      await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`); await ready(page);
+      const current = () => page.locator('.customer-nav [aria-current]').getAttribute('data-id');
+      for (const mode of ['', 'ios-home-screen', 'is-native']) {
+        await page.evaluate(mode => { document.documentElement.classList.remove('ios-home-screen', 'is-native'); if (mode) document.documentElement.classList.add(mode); }, mode);
+        await page.getByRole('button', { name:'Flavors', exact:true }).click();
+        const header = page.locator('.collection-header');
+        const prevented = await touchStroke(page, engine, header, -130, 18, { native:false, pointerCancel:true });
+        assert.equal(await current(), 'favorites', `${mode}: touch swipe survives cancelled pointer stream`);
+        assert.equal(prevented[0], false, 'touch start never steals a tap or pinch');
+        assert.ok(prevented.slice(1, -1).every(Boolean), 'horizontal moves are claimed by a non-passive listener');
+        await touchStroke(page, engine, page.locator('.collection-header'), -130, 15, { native:false });
+        assert.equal(await current(), 'alerts', 'paired touch/pointer events navigate exactly one page');
+        for (const options of [{ verticalFirst:true }, { cancelable:false }, { secondary:true }, { cancel:true }, { x:5 }, { detach:true }]) {
+          const events = await touchStroke(page, engine, page.locator('.collection-header'), 130, 10, { native:false, ...options });
+          assert.equal(await current(), 'alerts', 'scroll, pinch, cancellation, edges, and detached screens cannot navigate');
+          if (options.verticalFirst || options.secondary || options.cancelable === false || options.x) assert.ok(events.every(value => !value), 'native gesture is not prevented');
+        }
+        await page.getByRole('button', { name:'Flavors', exact:true }).click();
+        const search = page.getByRole('searchbox', { name:'Search flavors', exact:true });
+        await search.fill('Butterscotch');
+        assert.ok((await touchStroke(page, engine, search, -130, 0, { native:false })).every(value => !value), 'search gestures are untouched');
+        assert.equal(await current(), 'library');
+        assert.equal(await search.inputValue(), 'Butterscotch');
+        await search.fill(''); await search.blur();
+        await touchStroke(page, engine, page.locator('.library-detail').first(), 100, 12, { native:false, pointerCancel:true });
+        assert.equal(await page.getByRole('dialog').count(), 0, 'drag on end page does not open story');
+        await page.locator('.library-detail').first().tap();
+        await page.getByRole('dialog').waitFor();
+        await checkLayout(page, `${mode || 'browser'} touch story`);
+        assert.equal(await page.locator('.screen').evaluate(el => getComputedStyle(el).filter), 'blur(4px)');
+        await close(page);
+      }
+      assert.equal(await page.evaluate(() => window.uiWrites), 0);
     } finally { await browser?.close(); await server.close(); }
   });
 
