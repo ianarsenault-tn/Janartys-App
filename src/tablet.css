@@ -1,6 +1,7 @@
 /* Adapt to the app window, including iPad multitasking, rather than a device name.
    Short landscape iPhone windows retain the compact layout. */
 @media (min-width: 700px) and (min-height: 501px) {
+  :root { --screen-header-top: 26px; }
   #app, html.is-native #app {
     width: 100%;
     max-width: 1280px;
@@ -9,7 +10,7 @@
     margin-inline: auto;
   }
 
-  .nav { padding: calc(26px + env(safe-area-inset-top)) 32px 20px; }
+  .nav { padding: var(--screen-header-top) 32px 20px; }
   .nav.brand { gap: 18px; padding-bottom: 20px; }
   .nav.brand .nav-logo { width: 76px; height: 72px; margin: -4px 0 -4px -8px; }
   .nav.brand .nav-logo .nav-mark { width: 64px; height: 56px; flex-basis: 64px; }
@@ -51,7 +52,7 @@
   .customer-nav { padding: 10px max(28px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(28px, env(safe-area-inset-left)); gap: 12px; }
   .customer-nav button { min-height: 58px; flex-direction: row; gap: 10px; font-size: 13px; border-radius: 14px; }
   .customer-nav svg { width: 24px; height: 24px; }
-  .collection-header { padding: calc(32px + env(safe-area-inset-top)) 32px 24px; }
+  .collection-header { padding: var(--screen-header-top) 32px 24px; }
   .collection-kicker { font-size: 12px; }
   .collection-header h1 { font-size: 34px; max-width: none; margin: 12px 0; }
   .collection-header p { font-size: 16px; }

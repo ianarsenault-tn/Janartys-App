@@ -14,6 +14,8 @@
   --body: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
   --serif: "Fraunces", Georgia, serif;
   --phone: 393px;
+  --app-safe-top: env(safe-area-inset-top);
+  --screen-header-top: 12px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,7 +55,13 @@ button:disabled { cursor: default; opacity: 0.45; }
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
     0 24px 48px rgba(26, 18, 16, 0.12),
     0 60px 120px rgba(26, 18, 16, 0.1);
+  /* Reserve the status area outside every screen's scrolling content. */
+  padding-top: var(--app-safe-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
+/* Customer navigation owns its home-indicator clearance; staff screens use
+   the shell's inset so scrolling cannot put a control behind the indicator. */
+#app:has(> .customer-nav) { padding-bottom: 0; }
 
 /* Compact phone and narrow iPad windows fill the available space. */
 @media (max-width: 699px), (max-height: 500px) {
@@ -91,7 +99,7 @@ html.is-native #app {
 
 .screen {
   flex: 1;
-  scroll-padding-top: env(safe-area-inset-top);
+  scroll-padding-block: 12px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -123,7 +131,8 @@ html.is-native #app {
 
 /* ── Nav ─────────────────────────────────────────────── */
 .nav {
-  padding: calc(12px + env(safe-area-inset-top)) 20px 10px;
+  padding: var(--screen-header-top) 20px 10px;
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -911,7 +920,7 @@ textarea.field {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 12px 20px calc(20px + env(safe-area-inset-bottom));
+  padding: 12px 20px 20px;
 }
 .staff-sub {
   font-size: 14px;
@@ -1029,7 +1038,7 @@ textarea.field {
 .ig-card {
   display: block;
   flex: 0 0 auto;
-  margin: 0 16px calc(18px + env(safe-area-inset-bottom));
+  margin: 0 16px 18px;
   background: var(--white);
   border-radius: 16px;
   overflow: hidden;
@@ -1119,7 +1128,7 @@ textarea.field {
   padding: 8px 16px 8px;
 }
 .ig-mgr {
-  padding: 4px 16px calc(20px + env(safe-area-inset-bottom));
+  padding: 4px 16px 20px;
 }
 .ig-mgr.notice-mgr,
 .ig-mgr.hours-mgr {

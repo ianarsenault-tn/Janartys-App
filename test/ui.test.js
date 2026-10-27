@@ -241,4 +241,97 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
       }
     } finally { await browser?.close(); await server.close(); }
   });
+
+  test(`${engine}: shared screen spacing with iPhone safe areas`, { timeout: 180000 }, async () => {
+    // Desktop browser engines report zero env() insets. Substitute only those
+    // platform inputs in served CSS, leaving the application's layout intact.
+    const server = await createServer({
+      plugins: [{ name: "test-safe-area-inputs", enforce: "pre", transform(code, id) {
+        if (id.split("?")[0].endsWith(".css")) return code.replace(/env\(safe-area-inset-(top|bottom|left|right)\)/g, "var(--qa-safe-$1, 0px)");
+      } }],
+      server: { host: "127.0.0.1", port: 0 },
+    });
+    let browser;
+    try {
+      await server.listen();
+      const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+      browser = await engines[engine].launch({ executablePath: process.env[`UI_${engine.toUpperCase()}_EXECUTABLE`] || undefined });
+      for (const [width, height, top, bottom, side, standalone] of [
+        [320,568,59,34,0,true], [393,852,59,34,0,true], [430,932,62,34,0,true],
+        [393,680,0,21,0,false], [852,393,0,21,59,true], [768,1024,24,20,0,false],
+      ]) {
+        for (const scale of [1, 2]) {
+          const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "no-preference" });
+          const page = await context.newPage();
+          const errors = [];
+          page.on("pageerror", error => errors.push(error.message));
+          await isolate(page);
+          const label = `${engine} safe-area ${width}x${height} ${scale * 100}%`;
+          const edge = standalone ? Math.max(12, top) : top;
+          const tablet = width >= 700 && height >= 501;
+          async function header(name) {
+            const metrics = await page.evaluate(() => {
+              const screen = document.querySelector('.screen'), heading = screen.querySelector('.nav,.collection-header');
+              return { top: screen.getBoundingClientRect().top, scroll: screen.scrollTop,
+                padding: parseFloat(getComputedStyle(heading).paddingTop),
+                contentTop: Math.min(...[...heading.querySelectorAll('.nav-mark,.nav-title,.nav-kicker,.collection-kicker')].map(el => el.getBoundingClientRect().top)) };
+            });
+            assert.equal(metrics.top, edge, `${label} ${name}: scrolling starts below the status area`);
+            assert.equal(metrics.scroll, 0, `${label} ${name}: opens at the top`);
+            assert.equal(metrics.padding, tablet ? 26 : 12, `${label} ${name}: same header spacing`);
+            assert.ok(metrics.contentTop >= edge + 10, `${label} ${name}: header is clear of the top edge`);
+          }
+          async function reachable(selector) {
+            const target = page.locator(selector).last();
+            await target.scrollIntoViewIfNeeded();
+            const bounds = await target.evaluate(el => {
+              const r = el.getBoundingClientRect(), s = el.closest('.screen').getBoundingClientRect();
+              return { top: r.top, bottom: r.bottom, screenTop: s.top, screenBottom: s.bottom };
+            });
+            const visibleBottom = Math.min(bounds.screenBottom, height - bottom);
+            assert.ok(bounds.bottom > bounds.screenTop && bounds.bottom <= visibleBottom + 1, `${label} ${selector}: reachable above bottom controls`);
+            if (bounds.bottom - bounds.top <= visibleBottom - bounds.screenTop) assert.ok(bounds.top >= bounds.screenTop - 1, `${label} ${selector}: whole control fits`);
+          }
+          try {
+            await page.goto(origin); await ready(page);
+            await page.evaluate(value => document.documentElement.classList.toggle('ios-home-screen', value), standalone);
+            await page.addStyleTag({ content: `html{font-size:${scale * 100}%;--qa-safe-top:${top}px;--qa-safe-bottom:${bottom}px;--qa-safe-left:${side}px;--qa-safe-right:${side}px}` });
+            await header('Freezer');
+            await checkLayout(page, label);
+            assert.equal(await page.locator('.case > .card').count(), 8);
+            await reachable('.case > .card');
+            await reachable('.ig-card-head');
+            await reachable('.about-link');
+            const nav = await page.locator('.customer-nav').evaluate(el => ({ bottom: el.getBoundingClientRect().bottom, padding: parseFloat(getComputedStyle(el).paddingBottom) }));
+            assert.equal(nav.bottom, height);
+            assert.equal(nav.padding, bottom + (tablet ? 10 : 5), `${label}: home indicator clearance counted once`);
+            for (const tab of ['Flavors', 'Favorites', 'Alerts', 'Freezer']) {
+              await page.getByRole('button', { name: tab, exact: true }).click();
+              await header(tab);
+              await reachable('.about-link');
+            }
+            await page.evaluate(() => { location.hash = '/staff'; });
+            await page.getByRole('button', { name: 'Manage flavors', exact: true }).waitFor();
+            await header('Manager');
+            await reachable('.mgr-logout-btn');
+            await page.getByRole('button', { name: 'Manage flavors', exact: true }).click();
+            await checkCatalogRows(page, label, 152);
+            assert.equal(await page.locator('.screen').evaluate(el => getComputedStyle(el).filter), 'blur(4px)');
+            const drawerTop = await page.getByRole('dialog').evaluate(el => el.getBoundingClientRect().top);
+            assert.ok(drawerTop >= edge, `${label}: drawer stays below status area`);
+            await close(page);
+            await page.getByRole('button', { name: 'Log out', exact: true }).click();
+            await page.getByRole('button', { name: 'Unlock', exact: true }).waitFor();
+            await header('Unlock'); await reachable('.about-link');
+            assert.equal(await page.evaluate(() => window.uiWrites), 0);
+            assert.deepEqual(errors, []);
+          } catch (error) {
+            await mkdir('output/playwright/ui-regressions', { recursive: true });
+            await page.screenshot({ path: `output/playwright/ui-regressions/${engine}-safe-${width}-${scale}.png` });
+            throw error;
+          } finally { await context.close(); }
+        }
+      }
+    } finally { await browser?.close(); await server.close(); }
+  });
 }

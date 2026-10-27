@@ -63,17 +63,15 @@
 /* Give WebKit a fixed, opaque edge to sample instead of the scrolling logo.
    This noninteractive strip stays below the modal veil; drawer blur is unchanged. */
 .home-screen-top-edge { display: none; }
+.ios-home-screen { --app-safe-top: max(12px, env(safe-area-inset-top)); }
 .ios-home-screen .home-screen-top-edge {
   display: block;
   position: fixed;
   inset: 0 0 auto;
-  height: max(12px, env(safe-area-inset-top));
+  height: var(--app-safe-top);
   background: var(--cream);
   z-index: 20;
   pointer-events: none;
-}
-@media (max-width: 699px) {
-  .ios-home-screen .nav.brand { padding-top: calc(28px + env(safe-area-inset-top)); }
 }
 @media (max-width: 360px) {
   .nav.brand { gap: 8px; padding-left: 16px; padding-right: 16px; }
