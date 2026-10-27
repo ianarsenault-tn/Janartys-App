@@ -41,7 +41,7 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 
 ### Flavor library and favorites
 
-- Swipe left or right between **Flavors**, **Favorites**, and **Alerts**, or use the bottom navigation. Swipes stop at either end; vertical scrolling and form controls keep their normal behavior.
+- Swipe left or right through **Freezer**, **Flavors**, **Favorites**, and **Alerts**, or use the bottom navigation. Swipes stop at either end and tolerate a small diagonal start before moving horizontally. Vertical scrolling, form controls, and Instagram controls keep their normal behavior.
 - Browse active flavors received from the live shop document, including flavors not currently in the freezer. Archived flavors remain in saved Favorites with an Archived label, so they can still be removed or restored later.
 - Search by flavor name, description, or tags. Combine **In the freezer** and **Dairy-free** filters, including within Favorites.
 - Each library card retains its scoop color and description and indicates whether the flavor is currently in the freezer.
