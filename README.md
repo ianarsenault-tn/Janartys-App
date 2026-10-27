@@ -54,7 +54,7 @@ Customers do not need an account. Four bottom-navigation tabs organize the exper
 - The configured schedule is Wednesday–Sunday, 11:30am–9pm, with Monday and Tuesday closed. Staff can override today’s schedule or plan holiday closures and special openings in advance. Time calculations use `America/Chicago`.
 - The hours sheet includes a tap-to-call link and directions through Apple Maps, Google Maps, or Waze for the configured shop address.
 - A **From the shop** banner displays the latest active notice above the freezer. Posting another notice replaces it; notices expire at midnight in the shop’s time zone.
-- The **From @janartys** card shows a staff-selected image and caption and links to the configured Instagram post/profile. An optional automatic latest-post feed is prepared but disabled pending owner approval; see [INSTAGRAM.md](INSTAGRAM.md).
+- The **From @janartys** card shows a staff-selected image and caption and links to the configured Instagram post/profile. The optional automatic feed also supports tap-to-play videos with native controls and an **Open in Instagram** fallback. Setup is still pending; the feed remains disabled. See [INSTAGRAM.md](INSTAGRAM.md).
 
 ### About, help, and privacy
 

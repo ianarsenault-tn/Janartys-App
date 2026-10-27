@@ -92,6 +92,27 @@ textarea.field, .sheet textarea.field { font-size: 1rem; height: 6rem; }
 .hours-mgr [data-act="open-schedule"] { margin-top: 12px; }
 .ig-mgr > [data-ig-connection] { margin-bottom: 12px; }
 
+/* Keep the existing card, with a tap target over the cover and native controls. */
+.ig-video-card:active { transform: none; }
+.ig-video-card .ig-card-photo { position: relative; }
+.ig-video-card video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+.ig-video-card [hidden] { display: none; }
+.ig-video-start {
+  position: absolute; inset: 0; width: 100%; min-height: 44px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 0; color: white; background: #0008; font-size: 1rem; font-weight: 600;
+}
+.ig-video-start:focus-visible { outline-offset: -4px; }
+.ig-video-error { padding: 12px; font-size: 1rem; line-height: 1.5; }
+.ig-video-link { margin: 0 12px 12px; }
+@media (min-width: 700px) and (min-height: 501px) {
+  .ig-video-card { grid-template-rows: auto auto 1fr auto; }
+  .ig-video-card .ig-card-photo { grid-row: 1 / -1; }
+  .ig-video-card .ig-card-caption { grid-row: 3; }
+  .ig-video-error { grid-column: 2; grid-row: 2; }
+  .ig-video-link { grid-column: 2; grid-row: 4; }
+}
+
 /* Safari's intrinsic time-input width must not force the closing-time row
    beyond a small phone. Both the row and dated-hours fields can stack. */
 .hours-close { max-width: 100%; flex-wrap: wrap; height: auto; }

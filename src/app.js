@@ -23,6 +23,7 @@ import { setupStaffIdleTimeout } from "./staff-idle.js";
 import { INSTAGRAM_FEED_URL, INSTAGRAM_CONNECT_URL } from "./instagram-config.js";
 import { createInstagramConnection } from "./instagram-connect.js";
 import { createInstagramFeed, featuredInstagram, FEED_REFRESH_MS } from "./instagram-feed.js";
+import { setupInstagramVideo } from "./instagram-video.js";
 import { activeNotice, connectionLabel, freshSwap, JUST_OUT_MS, safeImageSrc, swapKey, caseUpdateLabel } from "./presentation.js";
 import { setupSheetInteractions } from "./sheet-interactions.js";
 import { tapFeedback } from "./feedback.js";
@@ -66,6 +67,7 @@ import {
 
 const root = document.querySelector("#app");
 setupFlavorNameFitting(root);
+const instagramVideo = setupInstagramVideo(root);
 let failedInstagramImage = "";
 const instagramFeed = createInstagramFeed({
   url: INSTAGRAM_FEED_URL,
@@ -73,7 +75,7 @@ const instagramFeed = createInstagramFeed({
     failedInstagramImage = "";
     // Replace just the card; preserve scroll, open sheets, and Manager drafts.
     const card = root.querySelector(".ig-card");
-    if (card && ui.view === "case") card.outerHTML = igCardHtml();
+    if (card && ui.view === "case") { instagramVideo.stop(); card.outerHTML = igCardHtml(); }
   },
 });
 const instagramConnection = createInstagramConnection({
@@ -261,7 +263,9 @@ function igCardHtml() {
   const href = safeHref(ig.permalink);
   const handle = ig.handle || "janartys";
   const src = safeImageSrc(ig.imageUrl) || safeImageSrc(SEED_INSTAGRAM.imageUrl);
-  return `<a class="ig-card" href="${esc(href)}" target="_blank" rel="noopener noreferrer">
+  const video = ig === automatic && ig.mediaType === "VIDEO";
+  const playable = video && ig.videoUrl;
+  return `${video ? '<article class="ig-card ig-video-card">' : `<a class="ig-card" href="${esc(href)}" target="_blank" rel="noopener noreferrer">`}
     <div class="ig-card-head">
       <span class="ig-avatar" aria-hidden="true"><span class="nav-mark"></span></span>
       <span class="ig-card-label">From @${esc(handle)}</span>
@@ -269,9 +273,11 @@ function igCardHtml() {
     </div>
     <div class="ig-card-photo">
       <img src="${esc(src)}" alt="" data-ig-photo />
+      ${playable ? `<video data-ig-video data-video-url="${esc(ig.videoUrl)}" poster="${esc(src)}" preload="none" playsinline controls hidden tabindex="0" aria-label="Instagram video from @janartys"></video><button class="ig-video-start" type="button" data-ig-play aria-label="Play Instagram video"><span aria-hidden="true">▶</span> Play video</button>` : ""}
     </div>
+    ${video ? `<p class="ig-video-error" data-ig-video-error role="status" ${playable ? "hidden" : ""}>${playable ? "Video couldn’t play here. Open it in Instagram to watch." : "Watch this video on Instagram."}</p>` : ""}
     <p class="ig-card-caption">${esc(ig.caption)}</p>
-  </a>`;
+    ${video ? `<a class="ig-video-link text-button" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Open in Instagram</a></article>` : "</a>"}`;
 }
 
 function sheetControls() {
@@ -959,6 +965,9 @@ function renderManager() {
 }
 
 function render() {
+  // A screen/sheet change stops playback before replacing its DOM, so audio
+  // cannot continue behind another view or a modal.
+  instagramVideo.stop();
   if (ui.sheet === "story" && !flavorById(ui.storyId)) ui.sheet = null;
   const focus = document.activeElement;
   const nextSheet = ui.sheet ? `${ui.sheet}:${ui.storyId || (ui.sheet === "edit" ? ui.edit?.id : ui.selectedPan) || ""}` : "";
@@ -1501,7 +1510,7 @@ root.addEventListener("error", (event) => {
   // card so a default image never appears beside an unrelated post's caption.
   failedInstagramImage = automatic.imageUrl;
   const card = root.querySelector(".ig-card");
-  if (card) card.outerHTML = igCardHtml();
+  if (card) { instagramVideo.stop(); card.outerHTML = igCardHtml(); }
 }, true);
 
 subscribe(() => {

@@ -9,6 +9,11 @@ export function validFeedPost(post, now = Date.now()) {
       || post.handle !== "janartys" || !safeHttpsUrl(post.imageUrl)
       || !safeHttpsUrl(post.permalink) || !Number.isFinite(post.fetchedAt)
       || post.fetchedAt > now + 60_000 || now - post.fetchedAt > FEED_MAX_AGE_MS) return false;
+  // Legacy cached photo/cover responses have neither field. Missing video URLs
+  // still allow the cover and Instagram link; unsafe URLs never reach a player.
+  if (post.mediaType != null && !["IMAGE", "VIDEO"].includes(post.mediaType)) return false;
+  if (post.videoUrl != null && (post.mediaType !== "VIDEO" || !safeHttpsUrl(post.videoUrl))) return false;
+  if (post.videoUrl && (new URL(post.videoUrl).username || new URL(post.videoUrl).password)) return false;
   const link = new URL(post.permalink);
   return ["instagram.com", "www.instagram.com"].includes(link.hostname)
     && /^\/(p|reel|tv)\/[^/]+\/?$/.test(link.pathname);

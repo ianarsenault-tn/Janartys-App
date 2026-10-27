@@ -11,7 +11,7 @@ const engines = { chromium, webkit };
 
 // No credentials or production reads: replace Firebase before it initializes,
 // block every non-local request, and make any attempted write fail the test.
-async function isolate(page) {
+async function isolate(page, { manualInstagram = false } = {}) {
   await page.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
   const module = (pattern, body) => page.route(pattern, route => route.fulfill({ contentType: "application/javascript", body }));
   await module("**/src/firebase.js*", "export const db = {}; export const auth = {};");
@@ -49,7 +49,7 @@ async function isolate(page) {
         dairyFree: catalog.length % 5 === 0 });
     }
     const now = Date.now();
-    const remote = { catalog, caseIds: SEED_CASE, instagram: SEED_INSTAGRAM,
+    const remote = { catalog, caseIds: SEED_CASE, instagram: ${manualInstagram ? '{ ...SEED_INSTAGRAM, source: "manual" }' : 'SEED_INSTAGRAM'},
       availability: { [SEED_CASE[0]]: { pintsAvailable: true, runningLow: true, at: now } },
       updatedAt: now, lastSwap: { inId: SEED_CASE[0], slot: 0, at: now }, lastNotice: null, hoursOverride: null };
     window.uiWrites = 0;
@@ -331,6 +331,158 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
             throw error;
           } finally { await context.close(); }
         }
+      }
+    } finally { await browser?.close(); await server.close(); }
+  });
+
+  test(`${engine}: Instagram tap-to-play and fallbacks without live services`, { timeout: 180000 }, async () => {
+    const movie = await readFile(new URL('./fixtures/instagram-video.mp4', import.meta.url));
+    const requests = new Map();
+    // Serve a real generated MP4 on loopback: Windows WebKit's native media
+    // loader does not use the mocked HTTPS response. Never contact a live CDN.
+    const serveVideo = (req, res, next) => {
+      if (!req.url.startsWith('/qa-video/')) return next();
+      const mode = req.url.split('/')[2];
+      requests.set(mode, (requests.get(mode) || 0) + 1);
+      if (mode === 'http-error') { res.statusCode = 403; res.end(); return; }
+      const body = mode === 'decode-error' ? Buffer.from('invalid video') : movie;
+      const range = /bytes=(\d+)-(\d*)/.exec(req.headers.range || '');
+      const start = range ? Number(range[1]) : 0, end = range ? Math.min(Number(range[2] || body.length - 1), body.length - 1) : body.length - 1;
+      res.statusCode = range ? 206 : 200;
+      res.setHeader('Content-Type', 'video/mp4'); res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Length', end - start + 1);
+      if (range) res.setHeader('Content-Range', `bytes ${start}-${end}/${body.length}`);
+      res.end(body.subarray(start, end + 1));
+    };
+    const server = await createServer({ server: { host: "127.0.0.1", port: 0 }, plugins: [{
+      name: "video-fixture", configureServer(server) { server.middlewares.use(serveVideo); },
+    }] });
+    let browser;
+    try {
+      await server.listen();
+      const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+      browser = await engines[engine].launch({ executablePath: process.env[`UI_${engine.toUpperCase()}_EXECUTABLE`] || undefined });
+      for (const mode of ['play', 'large-text', 'tablet', 'http-error', 'decode-error', 'play-rejected', 'timeout', 'missing-url', 'photo', 'legacy', 'manual']) {
+        const large = mode === 'large-text', tablet = mode === 'tablet';
+        const context = await browser.newContext({ viewport: { width: large ? 320 : tablet ? 768 : 393, height: tablet ? 1024 : large ? 568 : 852 } });
+        const page = await context.newPage();
+        const errors = [], mediaRequests = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await isolate(page, { manualInstagram: mode === 'manual' });
+        await page.route('**/src/instagram-config.js*', route => route.fulfill({ contentType: 'application/javascript', body: 'export const INSTAGRAM_FEED_URL="https://feed.test/latest"; export const INSTAGRAM_CONNECT_URL="";' }));
+        await page.route('https://feed.test/latest', route => route.fulfill({ json: {
+          imageUrl: 'https://media.test/cover.svg', caption: 'A fresh batch, on video.',
+          permalink: 'https://www.instagram.com/reel/fixture/', handle: 'janartys', fetchedAt: Date.now(),
+          ...(mode === 'legacy' ? {} : { mediaType: mode === 'photo' ? 'IMAGE' : 'VIDEO' }),
+          ...(['missing-url', 'photo', 'legacy'].includes(mode) ? {} : { videoUrl: 'https://media.test/video.mp4' }),
+        } }));
+        await page.route('https://media.test/cover.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#873684"/></svg>' }));
+        await page.route('https://media.test/video.mp4', route => {
+          mediaRequests.push(route.request().url());
+          return route.abort();
+        });
+        try {
+          await page.goto(origin); await ready(page);
+          if (mode !== 'manual') await page.getByText('A fresh batch, on video.', { exact: true }).waitFor();
+          if (large) await page.addStyleTag({ content: 'html { font-size: 200%; }' });
+          await page.locator('.ig-card').scrollIntoViewIfNeeded();
+          if (['photo', 'legacy', 'manual'].includes(mode)) {
+            await page.waitForFunction(() => document.querySelector('.ig-card')?.tagName === 'A');
+            assert.equal(await page.locator('[data-ig-video]').count(), 0);
+            assert.equal(await page.locator('[data-ig-play]').count(), 0);
+            assert.equal(mediaRequests.length, 0);
+          } else {
+            await page.locator('.ig-video-link').waitFor();
+            assert.equal(await page.locator('.ig-video-link').getAttribute('href'), 'https://www.instagram.com/reel/fixture/');
+            assert.equal(await page.locator('.ig-video-link').getAttribute('target'), '_blank');
+            assert.equal(await page.locator('.ig-card a video, .ig-card a button').count(), 0);
+            if (mode === 'missing-url') {
+              assert.equal(await page.locator('video').count(), 0);
+              assert.equal(await page.locator('[data-ig-video-error]').isVisible(), true);
+            } else {
+              const video = page.locator('[data-ig-video]');
+              assert.equal(await video.getAttribute('src'), null);
+              assert.equal(await video.getAttribute('autoplay'), null);
+              assert.equal(await video.getAttribute('preload'), 'none');
+              assert.equal(await video.getAttribute('playsinline'), '');
+              assert.equal(await video.getAttribute('controls'), '');
+              assert.equal(mediaRequests.length, 0, 'no video download before a tap');
+              assert.equal(requests.get(mode) || 0, 0);
+              // The production path accepts only HTTPS (covered in unit tests).
+              // Substitute the local fixture for native decoding, without enabling
+              // the integration or contacting Meta, Firebase, or a real media URL.
+              const localVideo = `${origin}/qa-video/${mode}/video.mp4`;
+              await video.evaluate((v, url) => { v.dataset.videoUrl = url; }, localVideo);
+              await checkLayout(page, `${engine} video ${mode}`);
+              const coverBox = await page.locator('.ig-card-photo').boundingBox();
+              if (mode === 'play-rejected') await page.evaluate(() => { HTMLMediaElement.prototype.play = () => Promise.reject(new DOMException('Blocked', 'NotAllowedError')); });
+              if (mode === 'timeout') {
+                await page.clock.install();
+                await page.evaluate(() => { HTMLMediaElement.prototype.play = () => new Promise(() => {}); });
+              }
+              if (large) {
+                await page.getByRole('button', { name: 'Play Instagram video', exact: true }).focus();
+                await page.keyboard.press('Enter');
+              } else await page.getByRole('button', { name: 'Play Instagram video', exact: true }).click();
+              if (mode === 'timeout') await page.clock.fastForward(15001);
+              if (['http-error', 'decode-error', 'play-rejected', 'timeout'].includes(mode)) {
+                await page.locator('[data-ig-video-error]').waitFor({ state: 'visible' });
+                assert.match(await page.locator('[data-ig-video-error]').textContent(), /couldn’t play/);
+                assert.equal(await video.isVisible(), false);
+                assert.equal(await video.getAttribute('src'), null);
+                assert.equal(await page.locator('[data-ig-photo]').isVisible(), true);
+                assert.equal(await page.locator('.ig-video-link').isVisible(), true);
+                await checkLayout(page, `${engine} failed video ${mode}`);
+                if (process.env.UI_VIDEO_SCREENSHOTS) await page.screenshot({ path: `output/playwright/${engine}-video-${mode}.png` });
+              } else {
+                await page.waitForFunction(() => { const v = document.querySelector('video'); return (v.currentTime > 0 && !v.paused) || !document.querySelector('[data-ig-video-error]').hidden; });
+                assert.ok(await video.evaluate(v => v.currentTime > 0 && !v.paused), 'video really decodes and plays');
+                assert.ok(requests.get(mode) > 0);
+                assert.equal(await video.isVisible(), true);
+                const playingBox = await page.locator('.ig-card-photo').boundingBox();
+                assert.ok(Math.abs(playingBox.height - coverBox.height) < 2, 'playback keeps the cover size');
+                await checkLayout(page, `${engine} playing video ${mode}`);
+                if (process.env.UI_VIDEO_SCREENSHOTS) await page.screenshot({ path: `output/playwright/${engine}-video-${mode}.png` });
+                await page.evaluate(() => { window.playedVideo = document.querySelector('video'); window.playedVideo.pause(); });
+                assert.equal(await video.evaluate(v => v.paused), true);
+                await video.evaluate(v => v.play());
+                await page.getByRole('button', { name: 'Flavors', exact: true }).click();
+                assert.equal(await page.evaluate(() => window.playedVideo.paused && !window.playedVideo.hasAttribute('src')), true, 'navigation stops/unloads playback');
+                await page.getByRole('button', { name: 'Freezer', exact: true }).click();
+                await video.evaluate((v, url) => { v.dataset.videoUrl = url; }, localVideo);
+                await page.getByRole('button', { name: 'Play Instagram video', exact: true }).click();
+                await page.waitForFunction(() => !document.querySelector('video').paused);
+                await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+                assert.equal(await video.getAttribute('src'), null);
+                assert.equal(await page.getByRole('button', { name: 'Play Instagram video', exact: true }).isVisible(), true);
+                if (mode === 'play') {
+                  await page.getByRole('button', { name: 'Play Instagram video', exact: true }).click();
+                  await page.waitForFunction(() => !document.querySelector('video').paused);
+                  await page.evaluate(() => {
+                    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+                    document.dispatchEvent(new Event('visibilitychange'));
+                  });
+                  assert.equal(await video.getAttribute('src'), null, 'backgrounding stops playback');
+                  await page.evaluate(() => { delete document.hidden; });
+                  await page.getByRole('button', { name: 'Play Instagram video', exact: true }).click();
+                  await page.waitForFunction(() => !document.querySelector('video').paused);
+                  await page.evaluate(() => { window.playedVideo = document.querySelector('video'); });
+                  await page.getByRole('button', { name: 'About, help & privacy', exact: true }).click();
+                  await checkLayout(page, `${engine} video stopped behind drawer`);
+                  assert.equal(await page.evaluate(() => window.playedVideo.paused && !window.playedVideo.hasAttribute('src')), true);
+                  assert.equal(await page.locator('.screen').evaluate(el => getComputedStyle(el).filter), 'blur(4px)');
+                }
+              }
+            }
+          }
+          assert.equal(await page.evaluate(() => window.uiWrites), 0);
+          assert.deepEqual(errors, []);
+        } catch (error) {
+          console.error(`${engine} video ${mode}`, { mediaRequests: mediaRequests.length, localRequests: requests.get(mode) || 0 }, await page.locator('video').evaluateAll(videos => videos.map(v => ({ error: v.error?.message, ready: v.readyState, network: v.networkState }))));
+          await mkdir('output/playwright/ui-regressions', { recursive: true });
+          await page.screenshot({ path: `output/playwright/ui-regressions/${engine}-video-${mode}.png` });
+          throw error;
+        } finally { await context.close(); }
       }
     } finally { await browser?.close(); await server.close(); }
   });
