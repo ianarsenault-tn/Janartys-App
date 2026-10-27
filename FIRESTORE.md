@@ -40,10 +40,15 @@ The browser's `STAFF_EMAILS` in `src/data.js` controls the Manager sign-in UI an
 
 ## What the rules allow
 
+The checks below describe the checked-in rules. The new optional-field shape checks are **not deployed** by this PR; the owner must review and deploy them separately. The October 26 record above remains the last verified backend deployment.
+
+On October 27, 2026, a read-only copy of the public live document (update time `2026-10-26T20:58:26.000750Z`, 152 catalog entries) passed these draft rules in the local emulator for both approved staff identities, including an unrelated partial update. Its schedule/source fields were absent, case timestamp numeric, and stored sold-out flags boolean. This is compatibility evidence, not a rules deployment; recheck before the owner's deployment. No production data was changed.
+
 - Anyone may read the public flavor board at exactly `shop/live`.
 - Only the two approved UID/email pairs may create or update it.
 - Staff updates must preserve the existing required fields, eight nonempty string case IDs, numeric update timestamp, and catalog limit of 500 entries.
-- Instagram may be null (use the default card) or a map. Its image URL, caption, permalink, and handle must be strings when present; its optional update timestamp must be numeric. Empty text and missing optional fields remain valid.
+- Instagram may be null (use the default card) or a map. Its image URL, caption, permalink, and handle must be strings when present; its optional update timestamp must be numeric. Optional `source` must equal `"manual"`, the only marker the app writes to Firestore. Empty text and missing optional fields remain valid.
+- Optional `scheduledHours` must be a map with at most 60 keys; optional `caseUpdatedAt` must be numeric. Optional `availability` must be a map with at most 500 keys; entries for the eight active case IDs must be maps with boolean `soldOut` when present.
 - Notices may be null or a map; the message, when present, must be a string of at most 100 characters. Hours overrides may be null or a map; date, open, close, and mode must be strings when present, and closed must be boolean. Sparse legacy maps and closed days without opening/closing times remain valid.
 - Catalog validation remains limited to the list type and 500-entry cap. Sparse legacy entries and nullable colors remain supported; these rules do not exhaustively validate catalog elements or URL schemes. The app validates HTTPS image URLs and permalinks on save; rendering rejects unsafe schemes in older data.
 - Validation checks the resulting document, so partial hours, notice, catalog, Instagram, stock, swap, and undo updates remain supported. Optional `availability` and richer `lastSwap` fields remain compatible.
@@ -65,7 +70,7 @@ Favorites and alert preferences remain on the device and require no customer dat
 
 ## Test and deploy
 
-Install Node.js and Java 21 or later, then:
+Install Node.js 22.5 or newer (latest 22 LTS recommended for tooling) and Java 21 or later, then:
 
 ```sh
 npm ci
@@ -92,7 +97,9 @@ The account-ID rules were published to `janarty-s` on October 19, 2026 at 10:30 
 
 ## Optional catalog and case metadata
 
-Manager supports optional `catalog[].archived`, `availability[id].soldOut`, and `caseUpdatedAt` fields within `shop/live`. Existing deployed rules allow these fields; no rules deployment, migration, or seed rewrite is required for this change. Emulator regression coverage verifies staff writes and denial of anonymous writes with the new fields.
+Manager supports optional `catalog[].archived`, `availability[id].soldOut`, and `caseUpdatedAt` fields within `shop/live`. Checked-in rules now enforce numeric `caseUpdatedAt`, a bounded availability map, and boolean `soldOut` for all eight active case IDs. Missing optional fields still pass. These additional checks require a separate owner-run rules deployment; this PR performs no deployment, migration, or seed rewrite. Emulator tests cover valid app patches, malformed fields, and unauthorized writes.
+
+Rules cannot iterate arbitrary catalog lists or availability maps: `catalog[].archived` and off-case stock entries are not exhaustively type-checked by rules. `archivePatch`, `setFlavorAvailability`, and the swap helpers write boolean flags for entries they change; they do not sanitize every legacy entry. `normalizeSchedule`/`scheduledHoursPatch` validate schedule contents, not archive/stock flags. These app checks are not a substitute for server-side enforcement; a map-size cap alone does not validate its values.
 
 `caseUpdatedAt` advances only on swaps, undo, pan stock changes, and edits to a flavor occupying a pan. Older documents show an unknown case-update time rather than borrowing the general `updatedAt`. The local cache records `caseLoaded` after loading a valid shop snapshot; this marker is not written to Firestore. Older unmarked local caches require a shop snapshot before showing current pans. Older app versions do not maintain or display the new fields, so staff should reload the app before using these controls.
 
@@ -104,4 +111,4 @@ Archiving preserves the entry and ID, hides it from ordinary browsing/swap choic
 
 Transactions preserve other dates and reject a stale draft if the selected date changed remotely. Today's quick `hoursOverride` takes priority; saving today's dated entry clears the captured quick override, rejecting the save if that override changed meanwhile. **Follow normal hours** removes today's scheduled entry and quick override while retaining future dates. These writes update `updatedAt`, not `caseUpdatedAt`, and do not edit the catalog or send notifications.
 
-Existing deployed rules allow this optional field; no migration or rules deployment is required. The app validates date/time contents; the rules continue to enforce staff authorization and the existing live-document shape, rather than the new per-date limits. Emulator tests cover authorized staff writes and anonymous denial. Opening the planner or loading the new app does not write this field.
+Checked-in rules enforce the optional map type and 60-key cap, including expired keys until an explicit save prunes them. The app still validates per-date contents and the planning window. The stricter checks await separate owner deployment; inspect the current live shape first, including expired entries, and do not silently rewrite it. Emulator tests cover the 60/61 boundary, wrong types, valid staff writes, and anonymous denial. Opening the planner or loading the app does not write this field.

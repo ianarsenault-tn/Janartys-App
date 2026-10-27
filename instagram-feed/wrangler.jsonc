@@ -1,5 +1,5 @@
 {
-  "$schema": "../push-relay/node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "janartys-instagram-feed",
   "main": "src/index.js",
   "compatibility_date": "2026-10-26",
@@ -14,6 +14,8 @@
     "INSTAGRAM_USER_ID": "",
     "INSTAGRAM_API_VERSION": ""
   },
+  // Activation example: "crons": ["0 */6 * * *"] (every six hours, UTC).
+  // Enable the cron and INSTAGRAM_ENABLED together only after owner approval.
   "triggers": { "crons": [] },
   "ratelimits": [
     { "name": "CONNECT_RATE_LIMITER", "namespace_id": "2026102601", "simple": { "limit": 60, "period": 60 } }

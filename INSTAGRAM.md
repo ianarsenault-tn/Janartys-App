@@ -35,7 +35,8 @@ until its endpoint is configured and confirms readiness.
 - Automatic content stays in a dedicated KV namespace, **not `shop/live`**.
   Firestore permissions, case updates, and the push relay are unchanged.
 - Saved Manager posts always win. New saves carry `source: "manual"`; custom
-  legacy cards also win. Existing rules already allow the optional source field.
+  legacy cards also win. The checked-in rules accept only `"manual"` when the
+  optional Firestore source field is present; stricter checks await owner deployment.
   Reset removes the override. When configured, the reset button reads **Use
   latest post**; otherwise it stays **Reset to default**. Feed arrivals preserve drafts.
 - API failures retain the last good post for at most 24 hours after the last
@@ -87,9 +88,11 @@ errors/codes/tokens and send no-store/no-referrer/CSP headers.
 
 ## Server setup and owner-approved activation
 
-Commands run from the repository root. The existing `push-relay` development
-dependencies provide Wrangler and the shared Firebase token verifier (`jose`).
-Install `npm ci --prefix push-relay` before running the Instagram tests/bundle.
+Commands run from the repository root. Install `npm ci --prefix instagram-feed`:
+this Worker declares its own `jose` and Wrangler dependencies and does not need
+`push-relay/node_modules`. Keep the repository checkout intact: both Workers
+import `shared/staff-auth.js` and the single UID/email allowlist in
+`push-relay/src/staff-identities.js`. No staff identities have changed.
 
 1. Configure Meta's Instagram Login app with `instagram_business_basic`. Set its
    valid OAuth redirect URI to `https://<worker-host>/connect/callback`, exactly
@@ -105,24 +108,27 @@ Install `npm ci --prefix push-relay` before running the Instagram tests/bundle.
    Create dedicated KV and D1 resources; replace their placeholder binding IDs:
 
    ```sh
-   npm ci --prefix push-relay
-   node push-relay/node_modules/wrangler/bin/wrangler.js kv namespace create janartys-instagram-feed
-   node push-relay/node_modules/wrangler/bin/wrangler.js d1 create janartys-instagram-oauth
-   node push-relay/node_modules/wrangler/bin/wrangler.js d1 migrations apply janartys-instagram-oauth --remote --config instagram-feed/wrangler.jsonc
+   npm ci --prefix instagram-feed
+   node instagram-feed/node_modules/wrangler/bin/wrangler.js kv namespace create janartys-instagram-feed --config instagram-feed/wrangler.jsonc
+   node instagram-feed/node_modules/wrangler/bin/wrangler.js d1 create janartys-instagram-oauth --config instagram-feed/wrangler.jsonc
+   node instagram-feed/node_modules/wrangler/bin/wrangler.js d1 migrations apply janartys-instagram-oauth --remote --config instagram-feed/wrangler.jsonc
    ```
 
 4. Deploy with both flags false and no cron, then enter the Instagram app's
    client secret at Wrangler's interactive prompt:
 
    ```sh
-   node push-relay/node_modules/wrangler/bin/wrangler.js deploy --config instagram-feed/wrangler.jsonc
-   node push-relay/node_modules/wrangler/bin/wrangler.js secret put INSTAGRAM_CLIENT_SECRET --config instagram-feed/wrangler.jsonc
+   npm run deploy --prefix instagram-feed
+   node instagram-feed/node_modules/wrangler/bin/wrangler.js secret put INSTAGRAM_CLIENT_SECRET --config instagram-feed/wrangler.jsonc
    ```
 
    Authorized/renewed tokens live in the dedicated KV key `private-token`, accessible
    only to its server binding and Cloudflare administrators. Do not share the
    namespace or enable raw request/response logging. Tokens refresh weekly while
-   scheduled sync runs. Before feed activation, no cron means no token renewal.
+   scheduled sync runs. Without an enabled scheduled sync, the long-lived token
+   is not renewed and normally expires after about 60 days (use the provider's
+   returned expiry). Owner linking alone does not maintain it; reconnect if it
+   expires while activation is pending. Requests to `/latest` do not renew tokens.
    The older operator-supplied `INSTAGRAM_ACCESS_TOKEN` path remains compatible;
    an owner-approved OAuth connection takes precedence over that bootstrap secret.
 5. When ready for the owners, set `INSTAGRAM_CONNECT_ENABLED` to `"true"`, deploy
@@ -130,7 +136,10 @@ Install `npm ci --prefix push-relay` before running the Instagram tests/bundle.
    app change. Keep `INSTAGRAM_ENABLED=false`, the public feed URL empty, and no
    cron. The owner now uses **Connect Instagram** in Manager. Verify success,
    denial, reconnect, wrong-account rejection, and return from the iOS browser.
-6. Only after approval/verification, set `INSTAGRAM_ENABLED` to `"true"` and `triggers.crons` to `["*/30 * * * *"]`;
+6. Only after approval/verification, enable **both** `INSTAGRAM_ENABLED="true"`
+   and a cron together, for example `triggers.crons: ["0 */6 * * *"]` (every six
+   hours, UTC). Neither setting alone runs a successful scheduled sync or renews
+   the token. For faster updates, `["*/30 * * * *"]` runs every 30 minutes;
    deploy this Worker only. After a scheduled run, inspect `/health`, `/latest`,
    account identity and invocation CPU/errors. Failures expose only generic
    errors. Verify the configured version, fields and token renewal with Meta
@@ -152,7 +161,8 @@ staff explicitly choose **Use latest post**.
 No Firebase billing upgrade, paid widget, Cloud Function, extra Firestore
 reads/writes or push activation is required. Workers Free includes 100,000
 requests/day, 10 ms CPU/invocation and five cron triggers/account. KV Free
-includes 100,000 reads/day, 1,000 writes/day and 1 GB storage. A 30-minute
+includes 100,000 reads/day, 1,000 writes/day and 1 GB storage. The six-hour example
+uses four runs/day; posts can take up to six hours to appear. An optional 30-minute
 schedule uses 48 runs, about 96 Meta reads and 48 public-cache writes/day, plus
 occasional token writes. Each enabled public endpoint request uses one KV read.
 There is no image proxy/video storage; images and tapped videos load directly
@@ -174,10 +184,12 @@ before activation; local tests cannot establish free-tier runtime capacity.
 
 ```sh
 npm ci --prefix push-relay
+npm ci --prefix instagram-feed
 npm test
 npm run test:relay
 npm run build
-node push-relay/node_modules/wrangler/bin/wrangler.js deploy --config instagram-feed/wrangler.jsonc --dry-run --outdir instagram-feed/.wrangler/build
+npm test --prefix instagram-feed
+npm run check --prefix instagram-feed
 ```
 
 Tests replace Meta, KV and Firestore with fixtures. PR checks do not deploy.

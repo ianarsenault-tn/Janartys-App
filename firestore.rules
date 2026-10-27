@@ -24,6 +24,7 @@ service cloud.firestore {
         && ig.get("caption", "") is string
         && ig.get("permalink", "") is string
         && ig.get("handle", "") is string
+        && (!("source" in ig) || ig.source == "manual")
         && ig.get("updatedAt", 0) is number);
     }
 
@@ -41,6 +42,21 @@ service cloud.firestore {
         && hours.get("open", "") is string
         && hours.get("close", "") is string
         && hours.get("mode", "") is string);
+    }
+
+    function isStock(availability, id) {
+      let stock = availability.get(id, {});
+      return stock is map && stock.get("soldOut", false) is bool;
+    }
+
+    function isAvailability(availability, ids) {
+      // Check the eight active pans, not arbitrary off-case entries. Rules cannot
+      // iterate maps/lists; catalog[].archived remains an app-side check.
+      return availability is map && availability.size() <= 500
+        && isStock(availability, ids[0]) && isStock(availability, ids[1])
+        && isStock(availability, ids[2]) && isStock(availability, ids[3])
+        && isStock(availability, ids[4]) && isStock(availability, ids[5])
+        && isStock(availability, ids[6]) && isStock(availability, ids[7]);
     }
 
     // Validate the resulting document, including after partial staff updates.
@@ -62,6 +78,10 @@ service cloud.firestore {
         && isInstagram(d.instagram)
         && isNotice(d.lastNotice)
         && isHoursOverride(d.hoursOverride)
+        && d.get("scheduledHours", {}) is map
+        && d.get("scheduledHours", {}).size() <= 60
+        && d.get("caseUpdatedAt", 0) is number
+        && isAvailability(d.get("availability", {}), d.caseIds)
         && d.updatedAt is number
         && d.catalog.size() <= 500;
     }
