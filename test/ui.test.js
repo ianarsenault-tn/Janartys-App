@@ -112,6 +112,43 @@ async function close(page) {
   await page.getByRole("dialog").waitFor({ state: "detached" });
 }
 
+// Chromium exercises native touch arbitration; WebKit exercises the same
+// pointer handlers deterministically, with real mouse drags for pointer capture.
+async function touchStroke(page, engine, target, dx, dy = 0, { native = true, cancel = false, secondary = false, x } = {}) {
+  await target.scrollIntoViewIfNeeded();
+  const box = await target.boundingBox();
+  const start = { x: x ?? box.x + box.width * (dx < 0 ? .8 : .2), y: box.y + Math.min(box.height / 2, 50) };
+  if (engine === "chromium" && native && !secondary) {
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...start, id: 1 }] });
+      for (let n = 1; n <= 8; n++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x + dx * n / 8, y: start.y + dy * n / 8, id: 1 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [] });
+    } finally { await cdp.detach(); }
+  } else {
+    await target.evaluate((element, { start, dx, dy, cancel, secondary }) => {
+      const dispatch = (type, x, y, extra = {}) => element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 11, pointerType: 'touch', isPrimary: true, button: 0, clientX: x, clientY: y, ...extra }));
+      dispatch('pointerdown', start.x, start.y);
+      if (secondary) dispatch('pointerdown', start.x + 10, start.y, { pointerId: 12, isPrimary: false });
+      for (let n = 1; n <= 8; n++) dispatch('pointermove', start.x + dx * n / 8, start.y + dy * n / 8);
+      dispatch(cancel ? 'pointercancel' : 'pointerup', start.x + dx, start.y + dy);
+      // Real browsers can synthesize a click after a drag. Check suppression
+      // against a surviving flavor-story button, not only an empty header.
+      if (!cancel && !secondary && element.isConnected) element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    }, { start, dx, dy, cancel, secondary });
+  }
+}
+
+async function dragDrawer(page, side, distance) {
+  await page.evaluate(() => Promise.all([...document.querySelectorAll('.sheet')].flatMap(el => el.getAnimations().map(a => a.finished.catch(() => {})))));
+  const box = await page.locator('.grabber').boundingBox();
+  const x = side === 'left' ? box.x + 10 : box.x + box.width - 10;
+  await page.mouse.move(x, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + box.height / 2 + distance, { steps: 8 });
+  await page.mouse.up();
+}
+
 async function checkCatalogRows(page, label, expectedCount) {
   await checkLayout(page, label);
   const rows = page.locator('.catalog > .row');
@@ -284,6 +321,9 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
           async function reachable(selector) {
             const target = page.locator(selector).last();
             await target.scrollIntoViewIfNeeded();
+            // A four-column pan at 200% text can be taller than the landscape
+            // viewport. Check its bottom explicitly rather than centering it.
+            await target.evaluate(el => el.scrollIntoView({ block: 'end', behavior: 'instant' }));
             const bounds = await target.evaluate(el => {
               const r = el.getBoundingClientRect(), s = el.closest('.screen').getBoundingClientRect();
               return { top: r.top, bottom: r.bottom, screenTop: s.top, screenBottom: s.bottom };
@@ -291,6 +331,11 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
             const visibleBottom = Math.min(bounds.screenBottom, height - bottom);
             assert.ok(bounds.bottom > bounds.screenTop && bounds.bottom <= visibleBottom + 1, `${label} ${selector}: reachable above bottom controls`);
             if (bounds.bottom - bounds.top <= visibleBottom - bounds.screenTop) assert.ok(bounds.top >= bounds.screenTop - 1, `${label} ${selector}: whole control fits`);
+            else {
+              await target.evaluate(el => el.scrollIntoView({ block: 'start', behavior: 'instant' }));
+              const top = await target.evaluate(el => ({ target: el.getBoundingClientRect().top, screen: el.closest('.screen').getBoundingClientRect().top }));
+              assert.ok(top.target >= top.screen - 1 && top.target < visibleBottom, `${label} ${selector}: tall content also scrolls to its top`);
+            }
           }
           try {
             await page.goto(origin); await ready(page);
@@ -486,4 +531,131 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
       }
     } finally { await browser?.close(); await server.close(); }
   });
+  test(`${engine}: customer swipes and wide drawer drag area`, { timeout: 120000 }, async () => {
+    const server = await createServer({ server: { host: "127.0.0.1", port: 0 } });
+    let browser;
+    try {
+      await server.listen();
+      const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+      browser = await engines[engine].launch({ executablePath: process.env[`UI_${engine.toUpperCase()}_EXECUTABLE`] || undefined });
+      for (const [width, height, scale] of [[320,568,1],[393,852,2]]) {
+        const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+        const page = await context.newPage(), errors = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await isolate(page);
+        const current = () => page.locator('.customer-nav [aria-current]').getAttribute('data-id');
+        async function expectView(view) { await page.waitForFunction(value => document.querySelector('.customer-nav [aria-current]')?.dataset.id === value, view); }
+        const header = page.locator('.collection-header');
+        try {
+          await page.goto(origin); await ready(page);
+          if (scale === 2) await page.addStyleTag({ content: 'html{font-size:200%}' });
+          await page.getByRole('button', { name:'Flavors', exact:true }).click();
+          assert.match(await page.locator('.collection-screen').evaluate(el => getComputedStyle(el).touchAction), /pan-y/);
+          await touchStroke(page, engine, header, -130); await expectView('favorites');
+          await touchStroke(page, engine, header, -130); await expectView('alerts');
+          await touchStroke(page, engine, header, -130); assert.equal(await current(), 'alerts', 'no wrapping at last page');
+          await touchStroke(page, engine, header, 130); await expectView('favorites');
+          await touchStroke(page, engine, header, 130); await expectView('library');
+          await touchStroke(page, engine, header, 130); assert.equal(await current(), 'library', 'Freezer is not part of this swipe sequence');
+          for (const [dx,dy,options] of [[30,0,{}],[-100,130,{}],[-130,0,{cancel:true}],[-130,0,{secondary:true}],[-130,0,{x:width-5}]]) {
+            await touchStroke(page, engine, header, dx, dy, options);
+            assert.equal(await current(), 'library', 'short, vertical/diagonal, cancelled, multi-touch, and edge gestures do not navigate');
+          }
+          const search = page.getByRole('searchbox', { name:'Search flavors', exact:true });
+          await search.fill('Butterscotch');
+          await touchStroke(page, engine, search, -110);
+          assert.equal(await current(), 'library'); assert.equal(await search.inputValue(), 'Butterscotch');
+          await search.fill(''); await search.blur();
+          // A swipe on a flavor card changes tabs without also opening a story.
+          const detail = page.locator('.library-detail').first();
+          await touchStroke(page, engine, detail, 100);
+          assert.equal(await page.getByRole('dialog').count(), 0, 'end-page drag does not click a story');
+          await touchStroke(page, engine, detail, -130); await expectView('favorites');
+          assert.equal(await page.getByRole('dialog').count(), 0);
+          await page.getByRole('button', {name:'Flavors',exact:true}).click();
+          if (engine === 'chromium') {
+            await page.locator('.screen').evaluate(el => { el.scrollTop = 0; });
+            await touchStroke(page, engine, header, 0, -100);
+            await page.waitForFunction(() => document.querySelector('.screen').scrollTop > 0);
+            assert.equal(await current(),'library','native vertical scroll stays on the page');
+          }
+          await page.locator('.favorite-button').first().click();
+          assert.equal(await page.locator('.favorite-button').first().getAttribute('aria-pressed'),'true','heart still works');
+          await page.getByRole('button',{name:'Alerts',exact:true}).click();
+          await page.locator('.alert-option input').first().check();
+          assert.equal(await page.locator('.alert-option input').first().isChecked(),true,'alert control still works');
+          await page.getByRole('button',{name:'Flavors',exact:true}).click();
+          await page.getByRole('button',{name:'About, help & privacy',exact:true}).click();
+          await checkLayout(page,'wide drawer');
+          const geometry = await page.evaluate(() => {
+            const controls=document.querySelector('.sheet-controls').getBoundingClientRect(), grabber=document.querySelector('.grabber').getBoundingClientRect(), dash=document.querySelector('.grabber span').getBoundingClientRect(), close=document.querySelector('.sheet-close').getBoundingClientRect();
+            return { width:grabber.width, available:controls.width, overlap:grabber.right>close.left+.5, centered:Math.abs((dash.left+dash.right)/2-(controls.left+controls.right)/2)<1 };
+          });
+          assert.ok(geometry.width >= geometry.available-45 && geometry.width>160);
+          assert.equal(geometry.overlap,false);assert.equal(geometry.centered,true);
+          await touchStroke(page, engine, page.locator('.about-content h2').first(), -100);
+          assert.equal(await current(),'library'); assert.equal(await page.getByRole('dialog').count(),1,'drawer prevents paging');
+          await dragDrawer(page,'left',24);
+          assert.equal(await page.getByRole('dialog').count(),1,'short drag snaps back');
+          await dragDrawer(page,'right',-25);
+          assert.equal(await page.getByRole('dialog').count(),1,'upward drag does not become a close tap');
+          await dragDrawer(page,scale===1?'left':'right',100);
+          await page.getByRole('dialog').waitFor({state:'detached'});
+          if (engine === 'chromium') {
+            await page.getByRole('button',{name:'About, help & privacy',exact:true}).click();
+            await checkLayout(page,'touch drawer');
+            const handle = page.locator('.grabber'), box = await handle.boundingBox();
+            await touchStroke(page, engine, handle, 0, 100, { x:box.x+10 });
+            await page.getByRole('dialog').waitFor({state:'detached'});
+          }
+          await page.locator('.library-detail').first().click();
+          await checkLayout(page,'story');
+          assert.equal(await page.locator('.screen').evaluate(el=>getComputedStyle(el).filter),'blur(4px)');
+          await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'detached'});
+          await page.evaluate(()=>{location.hash='/staff';});
+          await page.getByRole('button',{name:'Add flavor',exact:true}).click();
+          await dragDrawer(page,'left',100);await page.getByRole('dialog').waitFor({state:'detached'});
+          await page.emulateMedia({reducedMotion:'reduce'});
+          await page.getByRole('button',{name:'Add flavor',exact:true}).click();await dragDrawer(page,'right',100);
+          await page.getByRole('dialog').waitFor({state:'detached'});
+          await page.getByRole('button',{name:'Add flavor',exact:true}).click();await close(page);
+          assert.equal(await page.evaluate(()=>window.uiWrites),0);assert.deepEqual(errors,[]);
+        } catch(error) {
+          await mkdir('output/playwright/ui-regressions',{recursive:true});
+          await page.screenshot({path:`output/playwright/ui-regressions/${engine}-gestures-${width}-${scale}.png`});throw error;
+        } finally { await context.close(); }
+      }
+    } finally { await browser?.close(); await server.close(); }
+  });
+
+  test(`${engine}: landscape phones keep eight pans in two equal rows of four`, { timeout:120000 }, async () => {
+    const server=await createServer({server:{host:'127.0.0.1',port:0}});let browser;
+    try {
+      await server.listen();const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
+      browser=await engines[engine].launch({executablePath:process.env[`UI_${engine.toUpperCase()}_EXECUTABLE`]||undefined});
+      const page=await browser.newPage();await isolate(page);await page.goto(origin);await ready(page);
+      for(const [width,height] of [[568,320],[667,375],[852,393],[932,430],[1280,589]]) for(const scale of [1,2]) {
+        try {
+          await page.setViewportSize({width,height});await page.evaluate(value=>{document.documentElement.style.fontSize=`${value*100}%`;},scale);
+          await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+          await checkLayout(page,`${width}x${height} ${scale*100}% landscape`);
+          const cards=await page.locator('.case > .card').evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,width:r.width,height:r.height};}));
+          assert.equal(cards.length,8);assert.equal(new Set(cards.map(c=>Math.round(c.top))).size,2);
+          for(let i=0;i<8;i++) {
+            assert.ok(Math.abs(cards[i].width-cards[0].width)<1);
+            assert.ok(Math.abs(cards[i].top-cards[i<4?0:4].top)<1);
+          }
+          if(height<=500) for(const card of cards)assert.ok(Math.abs(card.height-cards[0].height)<1);
+          if(process.env.UI_GESTURE_SCREENSHOTS && width===852 && scale===1)await page.locator('.case').screenshot({path:`output/playwright/${engine}-landscape-four-pans.png`});
+        } catch(error) {
+          await mkdir('output/playwright/ui-regressions',{recursive:true});await page.screenshot({path:`output/playwright/ui-regressions/${engine}-landscape-${width}-${scale}.png`});throw error;
+        }
+      }
+      await page.setViewportSize({width:393,height:852});await page.evaluate(()=>{document.documentElement.style.fontSize='100%';});
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('.case').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),2,'portrait layout unchanged');
+      assert.equal(await page.evaluate(()=>window.uiWrites),0);
+    } finally {await browser?.close();await server.close();}
+  });
+
 }

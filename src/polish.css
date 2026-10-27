@@ -74,10 +74,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--purple); outlin
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 80px;
-  width: 80px;
+  /* The whole top strip can be dragged; reserve the separate 44px close
+     button and balance that space so the visible dash stays centered. */
+  flex: 1 1 auto;
+  width: auto;
   height: 44px;
-  margin: 0;
+  margin: 0 44px 0 0;
+  padding-left: 44px;
   border-radius: 10px;
   background: none;
   touch-action: none;
