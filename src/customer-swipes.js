@@ -1,10 +1,10 @@
-const PAGES = ["library", "favorites", "alerts"];
+const PAGES = ["case", "library", "favorites", "alerts"];
 
 /** Touch-only paging; native vertical scrolling and pinch zoom keep priority. */
 export function setupCustomerSwipes(root, currentView, navigate) {
   let gesture = null;
   let suppressClickUntil = 0;
-  const blockedControl = 'input, textarea, select, label, a, video, [contenteditable]:not([contenteditable="false"]), button:not(.library-detail)';
+  const blockedControl = 'input, textarea, select, label, a, video, [contenteditable]:not([contenteditable="false"]), button:not([data-act="open-story"])';
 
   const active = () => gesture && gesture.screen.isConnected
     && currentView() === gesture.view && !root.classList.contains("has-sheet");
@@ -15,7 +15,7 @@ export function setupCustomerSwipes(root, currentView, navigate) {
     suppressClickUntil = 0;
     if (event.touches.length !== 1) return;
     const touch = event.touches[0];
-    const screen = event.target.closest(".collection-screen");
+    const screen = event.target.closest(".case-screen, .collection-screen");
     const view = currentView();
     // Leave system back/forward gestures at the screen edges alone.
     if (!screen || root.classList.contains("has-sheet") || !PAGES.includes(view)
@@ -33,7 +33,10 @@ export function setupCustomerSwipes(root, currentView, navigate) {
     if (touch.identifier !== gesture.id) { gesture = null; return; }
     const dx = Math.abs(touch.clientX - gesture.x), dy = Math.abs(touch.clientY - gesture.y);
     if (!gesture.horizontal && Math.max(dx, dy) >= 8) {
-      if (dx < dy * 1.5) { gesture = null; return; }
+      // Allow a small diagonal wobble before the finger settles horizontally.
+      // Predominantly vertical starts still scroll; completion must be clearly
+      // horizontal (the stricter ratio below), not just a diagonal drag.
+      if (dx < dy * 0.8) { gesture = null; return; }
       gesture.horizontal = true;
     }
     if (gesture.horizontal) event.preventDefault();

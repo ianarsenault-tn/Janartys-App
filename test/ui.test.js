@@ -116,19 +116,23 @@ async function close(page) {
 // exposes taps, so dispatch actual TouchEvents (not just PointerEvents) there.
 // Paired pointer events model compatibility delivery; cancellation must not
 // discard an otherwise active touch sequence or cause duplicate navigation.
-async function touchStroke(page, engine, target, dx, dy = 0, { native = true, cancel = false, secondary = false, x, pointerCancel = false, cancelable = true, verticalFirst = false, detach = false } = {}) {
+async function touchStroke(page, engine, target, dx, dy = 0, { native = true, cancel = false, secondary = false, x, pointerCancel = false, cancelable = true, verticalFirst = false, detach = false, path } = {}) {
   await target.scrollIntoViewIfNeeded();
   const box = await target.boundingBox();
   const start = { x: x ?? box.x + box.width * (dx < 0 ? .8 : .2), y: box.y + Math.min(box.height / 2, 50) };
+  const points = path || Array.from({ length:8 }, (_, i) => [dx * (i + 1) / 8, dy * (i + 1) / 8]);
   if (engine === "chromium" && native && !secondary) {
     const cdp = await page.context().newCDPSession(page);
     try {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...start, id: 1 }] });
-      for (let n = 1; n <= 8; n++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x + dx * n / 8, y: start.y + dy * n / 8, id: 1 }] });
+      for (const [x,y] of points) {
+        await cdp.send('Input.dispatchTouchEvent', { type:'touchMove', touchPoints:[{ x:start.x+x, y:start.y+y, id:1 }] });
+        if (path) await page.waitForTimeout(20); // Preserve the diagonal-start event before the horizontal continuation.
+      }
       await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [] });
     } finally { await cdp.detach(); }
   } else {
-    return target.evaluate((element, { start, dx, dy, cancel, secondary, pointerCancel, cancelable, verticalFirst, detach }) => {
+    return target.evaluate((element, { start, dx, dy, cancel, secondary, pointerCancel, cancelable, verticalFirst, detach, points }) => {
       const pointer = (type, x, y) => element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 11, pointerType: 'touch', isPrimary: true, button: 0, clientX: x, clientY: y }));
       const touch = (x, y, identifier = 11) => ({ identifier, target: element, clientX: x, clientY: y });
       const dispatch = (type, changed, active, canCancel = true) => {
@@ -151,13 +155,13 @@ async function touchStroke(page, engine, target, dx, dy = 0, { native = true, ca
         pointer('pointercancel', start.x, start.y);
         pointer('lostpointercapture', start.x, start.y);
       }
-      for (let n = 1; n <= 8; n++) {
-        const point = touch(start.x + dx * n / 8, start.y + dy * n / 8);
+      for (const [x,y] of points) {
+        const point = touch(start.x + x, start.y + y);
         if (!pointerCancel) pointer('pointermove', point.clientX, point.clientY);
         prevented.push(dispatch('touchmove', [point], secondary ? [point, touch(start.x + 10, start.y, 12)] : [point], cancelable));
       }
       if (detach) {
-        const screen = element.closest('.collection-screen');
+        const screen = element.closest('.screen');
         screen.replaceWith(screen.cloneNode(true));
       }
       if (!pointerCancel) pointer(cancel ? 'pointercancel' : 'pointerup', start.x + dx, start.y + dy);
@@ -166,7 +170,7 @@ async function touchStroke(page, engine, target, dx, dy = 0, { native = true, ca
       // against a surviving flavor-story button, not only an empty header.
       if (!cancel && !secondary && element.isConnected) element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
       return prevented;
-    }, { start, dx, dy, cancel, secondary, pointerCancel, cancelable, verticalFirst, detach });
+    }, { start, dx, dy, cancel, secondary, pointerCancel, cancelable, verticalFirst, detach, points });
   }
 }
 
@@ -587,7 +591,9 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
           await touchStroke(page, engine, header, -130); assert.equal(await current(), 'alerts', 'no wrapping at last page');
           await touchStroke(page, engine, header, 130); await expectView('favorites');
           await touchStroke(page, engine, header, 130); await expectView('library');
-          await touchStroke(page, engine, header, 130); assert.equal(await current(), 'library', 'Freezer is not part of this swipe sequence');
+          await touchStroke(page, engine, header, 130); await expectView('case');
+          await touchStroke(page, engine, page.locator('.nav.brand'), 130); assert.equal(await current(), 'case', 'no wrapping before Freezer');
+          await touchStroke(page, engine, page.locator('.nav.brand'), -130); await expectView('library');
           for (const [dx,dy,options] of [[30,0,{}],[-100,130,{}],[-130,0,{cancel:true}],[-130,0,{secondary:true}],[-130,0,{x:width-5}]]) {
             await touchStroke(page, engine, header, dx, dy, options);
             assert.equal(await current(), 'library', 'short, vertical/diagonal, cancelled, multi-touch, and edge gestures do not navigate');
@@ -600,7 +606,9 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
           // A swipe on a flavor card changes tabs without also opening a story.
           const detail = page.locator('.library-detail').first();
           await touchStroke(page, engine, detail, 100);
-          assert.equal(await page.getByRole('dialog').count(), 0, 'end-page drag does not click a story');
+          await expectView('case');
+          assert.equal(await page.getByRole('dialog').count(), 0, 'back swipe does not click a story');
+          await page.getByRole('button', {name:'Flavors',exact:true}).click();
           await touchStroke(page, engine, detail, -130); await expectView('favorites');
           assert.equal(await page.getByRole('dialog').count(), 0);
           await page.getByRole('button', {name:'Flavors',exact:true}).click();
@@ -692,7 +700,9 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
         assert.equal(await search.inputValue(), 'Butterscotch');
         await search.fill(''); await search.blur();
         await touchStroke(page, engine, page.locator('.library-detail').first(), 100, 12, { native:false, pointerCancel:true });
-        assert.equal(await page.getByRole('dialog').count(), 0, 'drag on end page does not open story');
+        assert.equal(await current(), 'case', 'back swipe survives pointer cancellation');
+        assert.equal(await page.getByRole('dialog').count(), 0, 'back swipe does not open story');
+        await page.getByRole('button', { name:'Flavors', exact:true }).click();
         await page.locator('.library-detail').first().tap();
         await page.getByRole('dialog').waitFor();
         await checkLayout(page, `${mode || 'browser'} touch story`);
@@ -701,6 +711,82 @@ for (const engine of (process.env.UI_BROWSERS || "chromium,webkit").split(",")) 
       }
       assert.equal(await page.evaluate(() => window.uiWrites), 0);
     } finally { await browser?.close(); await server.close(); }
+  });
+
+  test(`${engine}: freezer and diagonal-start swipes preserve scrolling and controls`, { timeout:120000 }, async () => {
+    const server = await createServer({ server:{ host:'127.0.0.1', port:0 } });
+    let browser;
+    try {
+      await server.listen();
+      browser = await engines[engine].launch({ executablePath:process.env[`UI_${engine.toUpperCase()}_EXECUTABLE`] || undefined });
+      for (const [width,height,scale] of [[320,568,1],[375,667,2]]) {
+        const context = await browser.newContext({ viewport:{width,height}, hasTouch:true, isMobile:true });
+        const page = await context.newPage(), errors=[];
+        page.on('pageerror', e=>errors.push(e.message));
+        await isolate(page);
+        const current = () => page.locator('.customer-nav [aria-current]').getAttribute('data-id');
+        const tab = name => page.getByRole('button',{name,exact:true}).click();
+        const diagonal = direction => [[12*direction,12],[30*direction,12],[65*direction,12],[100*direction,12],[130*direction,12]];
+        try {
+          await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`); await ready(page);
+          if (scale===2) await page.addStyleTag({content:'html{font-size:200%}'});
+          // Reproduce the measured failure on both blank/header space and text.
+          for (const selector of ['.collection-header','.library-note']) {
+            await tab('Flavors');
+            await touchStroke(page,engine,page.locator(selector).first(),-130,12,{path:diagonal(-1)});
+            assert.equal(await current(),'favorites',`${selector}: diagonal start followed by horizontal movement works`);
+            await touchStroke(page,engine,page.locator('.collection-header'),130,12,{path:diagonal(1)});
+            assert.equal(await current(),'library','diagonal start works in reverse');
+            assert.equal(await page.getByRole('dialog').count(),0,'swipes do not open stories');
+          }
+          const wobble = diagonal(-1); wobble[0][1] = 14;
+          await touchStroke(page,engine,page.locator('.collection-header'),-130,12,{path:wobble});
+          assert.equal(await current(),'favorites','slightly uneven diagonal starts are tolerated too');
+          await tab('Flavors');
+          await touchStroke(page,engine,page.locator('.collection-header'),130,12,{path:diagonal(1)});
+          assert.equal(await current(),'case','Flavors swipes back to Freezer');
+          assert.match(await page.locator('.case-screen').evaluate(el=>getComputedStyle(el).touchAction),/pan-y/);
+          await touchStroke(page,engine,page.locator('.case .card').first(),100);
+          assert.equal(await current(),'case','Freezer does not wrap to Alerts');
+          assert.equal(await page.getByRole('dialog').count(),0,'end-page card drag does not open story');
+          await page.locator('.case .card').first().tap();await page.getByRole('dialog').waitFor();await close(page);
+          await touchStroke(page,engine,page.locator('.case .card').nth(1),-130,12,{path:diagonal(-1)});
+          assert.equal(await current(),'library','Freezer flavor cards support forward swipes');
+          assert.equal(await page.getByRole('dialog').count(),0);
+          await tab('Freezer');
+          for (const options of [{verticalFirst:true},{secondary:true},{cancelable:false},{cancel:true},{x:width-5}]) {
+            await touchStroke(page,engine,page.locator('.nav.brand'),-130,12,{native:false,...options});
+            assert.equal(await current(),'case','vertical-first, multi-touch, active scrolling, cancel, and edge gestures stay put');
+          }
+          // Freezer hours and Instagram links remain controls, not swipe areas.
+          await tab('Freezer');
+          const hours = page.locator('[data-status-chip]');
+          assert.ok((await touchStroke(page,engine,hours,-130,0,{native:false})).every(v=>!v));
+          assert.equal(await current(),'case');
+          // The synthetic compatibility click may open hours; a real tap must too.
+          if (await page.getByRole('dialog').count()) await close(page);
+          await hours.tap();await page.getByRole('dialog').waitFor();await checkLayout(page,'Freezer hours');
+          await touchStroke(page,engine,page.locator('.sheet-title').first(),-130);
+          assert.equal(await current(),'case');
+          assert.equal(await page.locator('.screen').evaluate(el=>getComputedStyle(el).filter),'blur(4px)');
+          await close(page);
+          // Prevent a synthetic link click from leaving the isolated test page.
+          await page.locator('.ig-card').evaluate(el=>el.addEventListener('click',e=>e.preventDefault(),{once:true}));
+          assert.ok((await touchStroke(page,engine,page.locator('.ig-card'),-130,0,{native:false})).every(v=>!v));
+          assert.equal(await current(),'case');
+          if (engine==='chromium') {
+            // Run the native fling last so its momentum cannot consume a later tap.
+            await touchStroke(page,engine,page.locator('.nav.brand'),0,-100);
+            await page.waitForFunction(()=>document.querySelector('.screen').scrollTop>0);
+            assert.equal(await current(),'case','Freezer scrolls vertically without changing tabs');
+          }
+          assert.equal(await page.evaluate(()=>window.uiWrites),0);assert.deepEqual(errors,[]);
+        } catch(error) {
+          await mkdir('output/playwright/ui-regressions',{recursive:true});
+          await page.screenshot({path:`output/playwright/ui-regressions/${engine}-freezer-swipes-${width}-${scale}.png`});throw error;
+        } finally {await context.close();}
+      }
+    } finally {await browser?.close();await server.close();}
   });
 
   test(`${engine}: landscape phones keep eight pans in two equal rows of four`, { timeout:120000 }, async () => {

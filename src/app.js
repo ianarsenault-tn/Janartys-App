@@ -655,7 +655,7 @@ function renderCase() {
   if (ui.sheet === "maps") sheet = renderMapsSheet();
 
   root.innerHTML = `
-    <div class="screen">
+    <div class="screen case-screen">
       <header class="nav brand">
         <button class="nav-logo" type="button" data-act="logo-tap" aria-label="Janarty’s Homemade Ice Cream">
           ${coneSvg()}

@@ -2,7 +2,7 @@
 .customer-nav button{border:0;background:none;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--muted);font-size:10px;font-weight:600;border-radius:12px}
 .customer-nav button[aria-current]{color:#933a90;background:#f8eef7}
 .has-sheet .customer-nav{pointer-events:none}
-.collection-screen{touch-action:pan-y pinch-zoom}
+.case-screen,.collection-screen{touch-action:pan-y pinch-zoom}
 .collection-header{padding:var(--screen-header-top) 20px 18px;flex:none}
 .collection-kicker{font:700 10px/1.4 var(--heading);letter-spacing:.09em;text-transform:uppercase;color:#933a90}
 .collection-header h1{font:700 27px/1.13 var(--heading);letter-spacing:-.04em;max-width:300px;margin:9px 0}
