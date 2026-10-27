@@ -1,4 +1,4 @@
-import { verifyStaff } from "../../push-relay/src/staff-auth.js";
+import { verifyStaff } from "./staff-auth.js";
 import { GRAPH, hash, metaJson, TOKEN_KEY } from "./tokens.js";
 
 const ORIGINS = new Set(["https://ianarsenault-tn.github.io", "capacitor://localhost", "https://localhost"]);

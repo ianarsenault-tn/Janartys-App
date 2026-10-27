@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - run: npm ci --prefix instagram-feed
       - run: npm ci --prefix push-relay
       - run: npm test
       - uses: actions/setup-java@v4

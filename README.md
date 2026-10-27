@@ -223,10 +223,11 @@ Clearing device storage removes local favorites/preferences and cached data. Liv
 
 ## Local development
 
-Use Node.js 22 or a compatible newer version, plus npm. GitHub Actions uses Node.js 22.
+Tests require Node.js 22.5 or newer (SQLite test scripts include its experimental flag); use the latest Node.js 22 or newer LTS for the development tools. GitHub Actions uses the latest Node.js 22.
 
 ```sh
 npm ci
+npm ci --prefix instagram-feed
 npm run dev
 ```
 
@@ -266,6 +267,7 @@ GitHub Pages publishing does not update an installed iOS binary. Native changes 
 ### Checks
 
 ```sh
+npm ci --prefix instagram-feed
 npm test
 npx playwright install chromium webkit
 npm run test:ui

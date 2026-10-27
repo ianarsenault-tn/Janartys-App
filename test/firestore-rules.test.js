@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { deleteDoc, deleteField, doc, getDoc, runTransaction, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { swapPatch, undoPatch } from "../src/case-actions.js";
+import { archivePatch } from "../src/catalog-actions.js";
+import { addDays, scheduledHoursPatch } from "../src/hours-schedule.js";
 import { STAFF_IDENTITIES } from "../push-relay/src/staff-identities.js";
 
 // Never fall back to a live project or an arbitrary remote emulator.
@@ -103,7 +105,7 @@ test("only approved accounts may create a missing live board", async () => {
   }
 });
 
-test("dated hours work with existing rules while anonymous schedule writes remain denied", async () => {
+test("dated hours pass shape checks while anonymous schedule writes remain denied", async () => {
   const patch = { scheduledHours: { "2026-12-25": { closed: true }, "2026-12-24": { closed: false, open: "10:00", close: "16:00" } }, updatedAt: now };
   await assertFails(updateDoc(live(env.unauthenticatedContext().firestore()), patch));
   for (const identity of staff) {
@@ -114,7 +116,7 @@ test("dated hours work with existing rules while anonymous schedule writes remai
   }
 });
 
-test("optional case freshness, sold-out and archive fields work with existing rules and staff authorization", async () => {
+test("optional case freshness, sold-out and archive fields preserve staff authorization", async () => {
   const db = auth(...staff[0]);
   const catalog = fixture().catalog.map(f => f.id === "f8" ? { ...f, archived: true } : f);
   const patch = { catalog, caseUpdatedAt: now, availability: { f0: { soldOut: true, pintsAvailable: false, runningLow: false, at: now } } };
@@ -124,6 +126,64 @@ test("optional case freshness, sold-out and archive fields work with existing ru
   assert.equal(saved.caseUpdatedAt, now);
   assert.equal(saved.availability.f0.soldOut, true);
   assert.equal(saved.catalog.find(f => f.id === "f8").archived, true);
+});
+
+test("scheduled hours allow zero through 60 entries and reject wrong types or 61 entries", async () => {
+  const ref = live(auth(...staff[0]));
+  const schedule = count => Object.fromEntries(Array.from({ length: count }, (_, i) => [addDays("2026-10-19", i), { closed: true }]));
+  for (const scheduledHours of [{}, schedule(60)]) await assertSucceeds(updateDoc(ref, { scheduledHours }));
+  for (const scheduledHours of [schedule(61), null, [], "hours", 42, true]) await assertFails(updateDoc(ref, { scheduledHours }));
+  await assertSucceeds(updateDoc(ref, { scheduledHours: deleteField() }));
+});
+
+test("case freshness must be numeric when present, with missing legacy values still valid", async () => {
+  const ref = live(auth(...staff[0]));
+  for (const caseUpdatedAt of [0, now, now + 0.5]) await assertSucceeds(updateDoc(ref, { caseUpdatedAt }));
+  for (const caseUpdatedAt of [String(now), null, false, [], {}]) await assertFails(updateDoc(ref, { caseUpdatedAt }));
+  await assertSucceeds(updateDoc(ref, { caseUpdatedAt: deleteField() }));
+});
+
+test("stock map is bounded and soldOut is boolean for every active pan", async () => {
+  const ref = live(auth(...staff[0]));
+  for (const id of fixture().caseIds) {
+    for (const soldOut of [true, false]) await assertSucceeds(updateDoc(ref, { availability: { [id]: { soldOut, at: now } } }));
+    for (const soldOut of [null, "false", 0, [], {}]) await assertFails(updateDoc(ref, { availability: { [id]: { soldOut } } }));
+    await assertSucceeds(updateDoc(ref, { availability: { [id]: { at: now } } }));
+    await assertFails(updateDoc(ref, { availability: { [id]: null } }));
+  }
+  const stock = count => Object.fromEntries(Array.from({ length: count }, (_, i) => [`f${i}`, { soldOut: false }]));
+  await assertSucceeds(updateDoc(ref, { availability: stock(500) }));
+  for (const availability of [stock(501), null, [], "stock", false]) await assertFails(updateDoc(ref, { availability }));
+  await assertSucceeds(updateDoc(ref, { availability: deleteField() }));
+});
+
+test("current app patches pass together without rewriting a sparse legacy document", async () => {
+  for (const identity of staff) {
+    const ref = live(auth(...identity));
+    const current = fixture();
+    Object.assign(current, scheduledHoursPatch(current, "2026-10-19", { closed: false, open: "11:30", close: "19:00" }, null, "2026-10-19", now));
+    Object.assign(current, archivePatch(current, "f9", true, now));
+    Object.assign(current, { availability: { f0: { soldOut: true, runningLow: false, pintsAvailable: true, at: now } }, instagram: { ...current.instagram, source: "manual" } });
+    Object.assign(current, swapPatch(current, 0, "f8", "f0", "shape-swap", now));
+    await assertSucceeds(setDoc(ref, current));
+    await assertSucceeds(updateDoc(ref, undoPatch(current, "shape-swap", now + 1)));
+    await assertSucceeds(updateDoc(ref, archivePatch(current, "f9", false, now + 2)));
+    await assertSucceeds(updateDoc(ref, { lastNotice: { message: "Open today" } }));
+    assert.equal((await getDoc(ref)).data().availability.f0.soldOut, true);
+    // The app's archive writer emits booleans; rules cannot iterate all catalog entries.
+    for (const input of [true, false, "false", null, 1]) {
+      assert.equal(typeof archivePatch(fixture(), "f9", input, now).catalog[9].archived, "boolean");
+    }
+  }
+});
+
+test("Instagram source is absent or manual, never a malformed or automatic marker", async () => {
+  const ref = live(auth(...staff[0]));
+  for (const source of [null, false, 7, [], {}, "", "auto", "oauth", "x".repeat(100)]) {
+    await assertFails(updateDoc(ref, { instagram: { ...fixture().instagram, source } }));
+  }
+  await assertSucceeds(updateDoc(ref, { instagram: { ...fixture().instagram, source: "manual" } }));
+  await assertSucceeds(updateDoc(ref, { instagram: fixture().instagram }));
 });
 
 test("staff cannot delete the board, remove required fields, or save invalid board shapes", async () => {

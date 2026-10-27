@@ -1,0 +1,13 @@
+{
+  "name": "janartys-instagram-feed",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "test": "node --experimental-sqlite --test test/*.test.js",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/build",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": { "jose": "^6.1.0" },
+  "devDependencies": { "wrangler": "^4.132.0" }
+}
