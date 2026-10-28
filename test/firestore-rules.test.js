@@ -96,6 +96,57 @@ for (const [uid, email] of staff) {
   });
 }
 
+test("swap and undo patches pass rules with missing, null, malformed, and valid incoming stock", async () => {
+  for (const identity of staff) {
+    const db = auth(...identity), ref = live(db);
+    for (const entry of [undefined, null, false, 0, "stock", [], {}, { soldOut: true, runningLow: true, pintsAvailable: true, at: now }]) {
+      const initial = fixture();
+      initial.availability = { f0: { soldOut: true, pintsAvailable: true, at: now }, f1: { soldOut: true, at: now } };
+      if (entry !== undefined) initial.availability.f8 = entry;
+      await seed(initial);
+      // Missing entries are already legal; explicit null/non-map entries are not.
+      const caseIds = ["f8", ...initial.caseIds.slice(1)];
+      if (entry !== undefined && (entry === null || typeof entry !== "object" || Array.isArray(entry))) {
+        await assertFails(updateDoc(ref, { caseIds }));
+      }
+      await assertSucceeds(runTransaction(db, async transaction => {
+        const state = (await transaction.get(ref)).data();
+        transaction.update(ref, swapPatch(state, 0, "f8", "f0", "stock-swap", now));
+      }));
+      const swapped = (await getDoc(ref)).data();
+      for (const id of swapped.caseIds) assert.equal(typeof swapped.availability[id].soldOut, "boolean");
+      assert.equal(swapped.availability.f8.soldOut, false);
+      assert.deepEqual(swapped.availability.f1, initial.availability.f1);
+      await assertSucceeds(runTransaction(db, async transaction => {
+        const state = (await transaction.get(ref)).data();
+        transaction.update(ref, undoPatch(state, "stock-swap", now + 1));
+      }));
+      const undone = (await getDoc(ref)).data();
+      for (const id of undone.caseIds) assert.equal(typeof undone.availability[id].soldOut, "boolean");
+      assert.deepEqual(undone.availability.f0, initial.availability.f0, "valid saved sold-out and pint labels are restored");
+    }
+  }
+});
+
+test("legacy undo repairs absent or malformed returning stock before rules evaluate active pans", async () => {
+  const db = auth(...staff[0]), ref = live(db);
+  for (const entry of [undefined, null, false, "stock", [], { pintsAvailable: true, at: now }]) {
+    const initial = fixture();
+    const swapped = { ...initial, ...swapPatch(initial, 0, "f8", "f0", "legacy", now) };
+    swapped.lastSwap.previousOutAvailability = entry ?? null;
+    if (entry === undefined) delete swapped.availability.f0;
+    else swapped.availability.f0 = entry;
+    await seed(swapped);
+    await assertSucceeds(runTransaction(db, async transaction => {
+      const state = (await transaction.get(ref)).data();
+      transaction.update(ref, undoPatch(state, "legacy", now + 1));
+    }));
+    const saved = (await getDoc(ref)).data();
+    assert.equal(saved.caseIds[0], "f0");
+    for (const id of saved.caseIds) assert.equal(typeof saved.availability[id].soldOut, "boolean");
+  }
+});
+
 test("only approved accounts may create a missing live board", async () => {
   for (const [uid, email] of staff) {
     await env.clearFirestore();

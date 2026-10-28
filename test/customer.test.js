@@ -50,7 +50,7 @@ test("undo restores the exact latest swap, preserving unrelated fields and suppr
   assert.throws(() => undoPatch(state, "swap-1", now + UNDO_MS));
   assert.throws(() => undoPatch({ ...state, caseIds: base().caseIds }, "swap-1", now + 1000));
   const laterStock = { pintsAvailable: false, runningLow: false, at: now + 500 };
-  assert.deepEqual(undoPatch({ ...state, availability: { ...state.availability, f0: laterStock } }, "swap-1", now + 1000).availability.f0, laterStock);
+  assert.deepEqual(undoPatch({ ...state, availability: { ...state.availability, f0: laterStock } }, "swap-1", now + 1000).availability.f0, { ...laterStock, soldOut: false });
 });
 test("availability expires at shop midnight and running-low applies only to current pans", () => {
   assert.deepEqual(availabilityFor(base(), "f0", now), { pintsAvailable: true, runningLow: true, soldOut: false });

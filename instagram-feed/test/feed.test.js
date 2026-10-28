@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
+import { parse } from "jsonc-parser";
 import worker, { selectPost, syncInstagram } from "../src/index.js";
 
 const photo = { id: "post", media_type: "IMAGE", media_url: "https://cdn.example/photo.jpg", caption: "Fresh scoops", permalink: "https://www.instagram.com/p/test/", timestamp: "2026-10-25T12:00:00Z" };
@@ -23,8 +24,25 @@ function fixture() {
   return { env, values, reads, writes, calls, request };
 }
 
+function parseConfig(source) {
+  const errors = [];
+  const config = parse(source, errors, { allowTrailingComma: true });
+  assert.deepEqual(errors, [], "Wrangler configuration must be valid JSONC");
+  return config;
+}
+
+test("Wrangler JSONC accepts comments and trailing commas but rejects syntax errors", () => {
+  assert.deepEqual(parseConfig(`{
+    // Keep disabled until setup is complete.
+    "vars": { "INSTAGRAM_ENABLED": "false", }, /* inline comment */
+    "triggers": { "crons": [], },
+    "example": "https://example.test/path//literal",
+  }`), { vars: { INSTAGRAM_ENABLED: "false" }, triggers: { crons: [] }, example: "https://example.test/path//literal" });
+  assert.throws(() => parseConfig('{ "vars": { "INSTAGRAM_ENABLED": "false" }'), /valid JSONC/);
+});
+
 test("checked-in configuration cannot connect or schedule itself", async () => {
-  const config = JSON.parse((await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8")).replace(/^\s*\/\/.*$/gm, ""));
+  const config = parseConfig(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
   assert.equal(config.vars.INSTAGRAM_ENABLED, "false");
   assert.equal(config.vars.INSTAGRAM_CONNECT_ENABLED, "false");
   assert.equal(config.vars.INSTAGRAM_CLIENT_ID, "");
