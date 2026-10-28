@@ -2,6 +2,18 @@ import { SHOP_TZ } from "./data.js";
 export const UNDO_MS = 5 * 60 * 1000;
 const day = at => new Intl.DateTimeFormat("en-CA", { timeZone: SHOP_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 
+const isStock = value => value !== null && typeof value === "object" && !Array.isArray(value);
+
+function defaultActiveStock(availability, caseIds) {
+  // Normalize only on explicit swap/undo writes. Keep valid labels and all
+  // off-case entries intact; null/non-map active entries fail Firestore rules.
+  for (const id of caseIds) {
+    const stock = availability[id];
+    if (!isStock(stock)) availability[id] = { soldOut: false };
+    else if (typeof stock.soldOut !== "boolean") availability[id] = { ...stock, soldOut: false };
+  }
+}
+
 export function availabilityFor(state, id, now = Date.now()) {
   const item = state.availability?.[id];
   const soldOut = item?.soldOut === true && state.caseIds.includes(id);
@@ -23,7 +35,8 @@ export function swapPatch(state, slot, inId, expectedOutId, id, now = Date.now()
   const caseIds = [...state.caseIds];
   caseIds[slot] = inId;
   const availability = { ...state.availability };
-  for (const flavorId of [inId, expectedOutId]) if (availability[flavorId]) availability[flavorId] = { ...availability[flavorId], runningLow: false, soldOut: false };
+  for (const flavorId of [inId, expectedOutId]) if (isStock(availability[flavorId])) availability[flavorId] = { ...availability[flavorId], runningLow: false, soldOut: false };
+  defaultActiveStock(availability, caseIds);
   return { caseIds, availability, updatedAt: now, caseUpdatedAt: now, lastSwap: { id, kind: "swap", slot, outId: outgoing.id, inId, outName: outgoing.name, inName: incoming.name, at: now, previousOutAvailability: state.availability?.[outgoing.id] || null } };
 }
 
@@ -36,6 +49,7 @@ export function undoPatch(state, expectedId, now = Date.now()) {
   const before = swap.previousOutAvailability;
   const current = availability[swap.outId];
   // Restore the old pan labels only if nobody edited its stock after the swap.
-  if (before && current?.at === before.at && current.pintsAvailable === before.pintsAvailable && current.runningLow === false && current.soldOut !== true) availability[swap.outId] = before;
+  if (isStock(before) && isStock(current) && current.at === before.at && current.pintsAvailable === before.pintsAvailable && current.runningLow === false && current.soldOut !== true) availability[swap.outId] = before;
+  defaultActiveStock(availability, caseIds);
   return { caseIds, availability, updatedAt: now, caseUpdatedAt: now, lastSwap: { id: `undo-${swap.id}`, kind: "undo", undoOf: swap.id, slot: swap.slot, outId: swap.inId, inId: swap.outId, outName: swap.inName, inName: swap.outName, at: now } };
 }

@@ -189,6 +189,67 @@ test("sold out persists across midnight, suppresses low labels, and swap/undo re
   assert.equal(undoPatch({ ...state, ...patch }, "swap", now + 1).availability[id].runningLow, true);
 });
 
+test("Manager swaps and undo normalize missing or malformed stock on all active pans", async () => {
+  for (const entry of [undefined, null, false, 0, "stock", [], {}, { soldOut: true, runningLow: true, pintsAvailable: true, at: 123 }]) {
+    const remote = fixture(), outgoing = remote.caseIds[0];
+    const incoming = remote.catalog.find(f => !remote.caseIds.includes(f.id)).id;
+    if (entry !== undefined) remote.availability[incoming] = copy(entry);
+    remote.availability[outgoing] = null;
+    const kept = remote.caseIds[1];
+    remote.availability[kept] = { soldOut: true, pintsAvailable: true, at: 456 };
+    remote.availability[remote.caseIds[2]] = { soldOut: "false", pintsAvailable: true };
+    const h = await managerHarness({ remote });
+    await h.click("tap-pan", { slot: "0" });
+    await h.click("pick", { id: incoming });
+    await h.click("do-swap");
+    assert.equal(h.backend.remote.caseIds[0], incoming);
+    assert.equal(h.backend.remote.availability[incoming].soldOut, false);
+    if (entry !== null && typeof entry === "object" && !Array.isArray(entry)) {
+      assert.deepEqual(h.backend.remote.availability[incoming], { ...entry, soldOut: false, runningLow: false });
+    } else assert.deepEqual(h.backend.remote.availability[incoming], { soldOut: false });
+    for (const id of h.backend.remote.caseIds) {
+      assert.equal(typeof h.backend.remote.availability[id].soldOut, "boolean", `swap: ${id}`);
+      assert.ok(!Array.isArray(h.backend.remote.availability[id]));
+    }
+    assert.deepEqual(h.backend.remote.availability[kept], remote.availability[kept], "other pan stock stays intact");
+    await h.click("undo-swap", { id: h.backend.remote.lastSwap.id });
+    assert.equal(h.backend.remote.caseIds[0], outgoing);
+    for (const id of h.backend.remote.caseIds) assert.equal(typeof h.backend.remote.availability[id].soldOut, "boolean", `undo: ${id}`);
+  }
+});
+
+test("undo handles legacy missing stock and malformed saved snapshots without losing newer edits", () => {
+  for (const entry of [undefined, null, false, "stock", [], {}, { pintsAvailable: true, runningLow: true, at: 123 }]) {
+    const state = fixture(), id = state.caseIds[0];
+    const incoming = state.catalog.find(f => !state.caseIds.includes(f.id)).id;
+    const patch = swapPatch(state, 0, incoming, id, "legacy", 123);
+    const next = { ...state, ...patch, availability: { ...patch.availability } };
+    next.lastSwap = { ...patch.lastSwap, previousOutAvailability: entry ?? null };
+    if (entry === undefined) delete next.availability[id];
+    else next.availability[id] = copy(entry);
+    const before = copy(next);
+    const undone = undoPatch(next, "legacy", 124);
+    for (const active of undone.caseIds) assert.equal(typeof undone.availability[active].soldOut, "boolean");
+    assert.deepEqual(next, before, "patch construction does not mutate its input");
+    // An older saved snapshot can exist even when returning stock is now missing.
+    next.lastSwap.previousOutAvailability = { pintsAvailable: true };
+    const legacyUndo = undoPatch(next, "legacy", 124);
+    for (const active of legacyUndo.caseIds) assert.equal(typeof legacyUndo.availability[active].soldOut, "boolean");
+    const newer = { soldOut: true, pintsAvailable: false, at: 124 };
+    next.availability[id] = newer;
+    assert.deepEqual(undoPatch(next, "legacy", 125).availability[id], newer);
+  }
+});
+
+test("new catalog flavors receive boolean stock when Manager puts them in a pan", async () => {
+  const h = await managerHarness({ app: false });
+  const ids = [...h.backend.remote.caseIds];
+  const added = await h.store.addFlavor({ name: "Regression test flavor" });
+  assert.deepEqual(h.backend.remote.caseIds, ids, "Add Flavor only edits the catalog");
+  await h.store.swapPan(0, added.id, ids[0]);
+  for (const id of h.backend.remote.caseIds) assert.equal(typeof h.backend.remote.availability[id].soldOut, "boolean");
+});
+
 test("Manager sold-out saves await acknowledgement, reject stale pans and retain eight slots", async () => {
   const h = await managerHarness(); const id = h.store.getState().caseIds[0];
   await h.click("tap-pan", { slot: "0" });

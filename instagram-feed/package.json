@@ -9,5 +9,5 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": { "jose": "^6.1.0" },
-  "devDependencies": { "wrangler": "^4.132.0" }
+  "devDependencies": { "jsonc-parser": "^3.3.1", "wrangler": "^4.132.0" }
 }
