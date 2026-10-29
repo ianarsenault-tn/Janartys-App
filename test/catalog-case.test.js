@@ -273,3 +273,29 @@ test("sold-out flavors do not appear in available-only results or carry Just out
   assert.ok(!html.includes(`data-id="${id}"`));
   assert.equal(flavorLocation(h.store.getState(), h.store.flavorById(id)), "Sold out");
 });
+
+test("Manager saves only valid undo snapshots", async () => {
+  for (const stock of ["bad", false, [], {}, { soldOut: "false" }, null, { soldOut: false, pintsAvailable: true }, { soldOut: true }]) {
+    const remote = fixture(), outgoing = remote.caseIds[0];
+    const incoming = remote.catalog.find(f => !remote.caseIds.includes(f.id)).id;
+    remote.availability[outgoing] = stock;
+    const h = await managerHarness({ remote, app: false });
+    await h.store.swapPan(0, incoming, outgoing);
+    const swap = h.backend.remote.lastSwap;
+    const valid = stock && !Array.isArray(stock) && typeof stock.soldOut === "boolean";
+    assert.deepEqual(swap.previousOutAvailability, valid ? stock : null);
+    await h.store.undoLastSwap(swap.id);
+    assert.equal(h.backend.remote.caseIds[0], outgoing);
+    assert.equal(typeof h.backend.remote.availability[outgoing].soldOut, "boolean");
+  }
+});
+
+test("undo snapshots reject class instances and retain null-prototype plain stock", () => {
+  class Stock { constructor() { this.soldOut = true; } }
+  for (const value of [new Stock(), new Date(), Object.assign(Object.create(null), { soldOut: false })]) {
+    const state = fixture(), out = state.caseIds[0], incoming = state.catalog.find(f => !state.caseIds.includes(f.id)).id;
+    state.availability[out] = value;
+    const snapshot = swapPatch(state, 0, incoming, out, "plain").lastSwap.previousOutAvailability;
+    assert.deepEqual(snapshot, Object.getPrototypeOf(value) === null ? { soldOut: false } : null);
+  }
+});

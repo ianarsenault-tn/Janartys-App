@@ -49,6 +49,13 @@ service cloud.firestore {
       return stock is map && stock.get("soldOut", false) is bool;
     }
 
+    function isSwapSnapshot(swap) {
+      return swap == null || (swap is map
+        && (swap.get("previousOutAvailability", null) == null
+          || (swap.previousOutAvailability is map
+            && swap.previousOutAvailability.get("soldOut", false) is bool)));
+    }
+
     function isAvailability(availability, ids) {
       // Check the eight active pans, not arbitrary off-case entries. Rules cannot
       // iterate maps/lists; catalog[].archived remains an app-side check.
@@ -77,6 +84,7 @@ service cloud.firestore {
         && isCaseId(d.caseIds[6]) && isCaseId(d.caseIds[7])
         && isInstagram(d.instagram)
         && isNotice(d.lastNotice)
+        && isSwapSnapshot(d.lastSwap)
         && isHoursOverride(d.hoursOverride)
         && d.get("scheduledHours", {}) is map
         && d.get("scheduledHours", {}).size() <= 60
