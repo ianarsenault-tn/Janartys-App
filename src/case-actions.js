@@ -4,6 +4,11 @@ const day = at => new Intl.DateTimeFormat("en-CA", { timeZone: SHOP_TZ, year: "n
 
 const isStock = value => value !== null && typeof value === "object" && !Array.isArray(value);
 
+function stockSnapshot(value) {
+  const proto = isStock(value) ? Object.getPrototypeOf(value) : undefined;
+  return (proto === null || (proto && Object.getPrototypeOf(proto) === null)) && typeof value.soldOut === "boolean" ? { ...value } : null;
+}
+
 function defaultActiveStock(availability, caseIds) {
   // Normalize only on explicit swap/undo writes. Keep valid labels and all
   // off-case entries intact; null/non-map active entries fail Firestore rules.
@@ -37,7 +42,7 @@ export function swapPatch(state, slot, inId, expectedOutId, id, now = Date.now()
   const availability = { ...state.availability };
   for (const flavorId of [inId, expectedOutId]) if (isStock(availability[flavorId])) availability[flavorId] = { ...availability[flavorId], runningLow: false, soldOut: false };
   defaultActiveStock(availability, caseIds);
-  return { caseIds, availability, updatedAt: now, caseUpdatedAt: now, lastSwap: { id, kind: "swap", slot, outId: outgoing.id, inId, outName: outgoing.name, inName: incoming.name, at: now, previousOutAvailability: state.availability?.[outgoing.id] || null } };
+  return { caseIds, availability, updatedAt: now, caseUpdatedAt: now, lastSwap: { id, kind: "swap", slot, outId: outgoing.id, inId, outName: outgoing.name, inName: incoming.name, at: now, previousOutAvailability: stockSnapshot(state.availability?.[outgoing.id]) } };
 }
 
 export function undoPatch(state, expectedId, now = Date.now()) {

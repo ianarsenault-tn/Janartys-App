@@ -328,3 +328,5 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 - The iOS project supports iPhone and iPad. An Android native project is not included.
 
 For operational detail, use [FIRESTORE.md](FIRESTORE.md), [IOS.md](IOS.md), and [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
+
+`npm ci && npm test` automatically installs Instagram test dependencies through the root `pretest` hook (network access required).

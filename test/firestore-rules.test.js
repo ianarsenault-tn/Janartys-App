@@ -330,3 +330,9 @@ test("nullable and sparse hours overrides remain compatible with unrelated updat
     await assertSucceeds(updateDoc(live(db), { lastNotice: { message: "Open today", at: now }, updatedAt: now + 1 }));
   }
 });
+
+test("undo snapshot allows absent, null and maps but rejects malformed values", async () => {
+  const ref = live(auth(...staff[0]));
+  for (const lastSwap of [null, {}, { previousOutAvailability: null }, { previousOutAvailability: {} }, { previousOutAvailability: { soldOut: false } }, { previousOutAvailability: { soldOut: true } }]) await assertSucceeds(updateDoc(ref, { lastSwap }));
+  for (const snapshot of ["bad", false, [], { soldOut: "false" }, { soldOut: null }]) await assertFails(updateDoc(ref, { lastSwap: { previousOutAvailability: snapshot } }));
+});

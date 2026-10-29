@@ -6,7 +6,7 @@ import { freshSwap } from "../src/presentation.js";
 
 const catalog = Array.from({ length: 10 }, (_, i) => ({ id: `f${i}`, name: `Flavor ${i}`, note: i === 8 ? "Floral lavender" : "House flavor", dairyFree: i % 2 === 0 }));
 const now = Date.parse("2026-09-15T18:00:00Z");
-const base = () => ({ catalog, caseIds: catalog.slice(0, 8).map(f => f.id), lastNotice: { message: "Keep this", at: now }, availability: { f0: { pintsAvailable: true, runningLow: true, at: now }, f8: { runningLow: true, at: now } } });
+const base = () => ({ catalog, caseIds: catalog.slice(0, 8).map(f => f.id), lastNotice: { message: "Keep this", at: now }, availability: { f0: { soldOut: false, pintsAvailable: true, runningLow: true, at: now }, f8: { runningLow: true, at: now } } });
 
 test("favorites normalize duplicates and malformed input without changing alert consent", () => {
   const value = normalizeCustomer({ favorites: ["mint", "mint", null, 42], alerts: { favorites: "true", announcements: true }, enabled: "true" });
