@@ -53,7 +53,8 @@ service cloud.firestore {
       return swap == null || (swap is map
         && (swap.get("previousOutAvailability", null) == null
           || (swap.previousOutAvailability is map
-            && swap.previousOutAvailability.get("soldOut", false) is bool)));
+            && "soldOut" in swap.previousOutAvailability
+            && swap.previousOutAvailability.soldOut is bool)));
     }
 
     function isAvailability(availability, ids) {

@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
-    "pretest": "npm ci --prefix instagram-feed --no-audit --no-fund",
+    "setup": "npm ci && npm ci --prefix instagram-feed",
     "test": "node --test test/smoke.test.js test/presentation.test.js test/customer.test.js && npm run test:manager && npm run test:instagram",
     "test:instagram": "node --experimental-sqlite --test test/instagram.test.js test/instagram-connect.test.js instagram-feed/test/*.test.js",
     "test:manager": "node --experimental-vm-modules --test test/manager.test.js test/catalog-case.test.js test/hours-about.test.js",
