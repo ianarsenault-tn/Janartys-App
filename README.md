@@ -226,8 +226,7 @@ Clearing device storage removes local favorites/preferences and cached data. Liv
 Tests require Node.js 22.5 or newer (SQLite test scripts include its experimental flag); use the latest Node.js 22 or newer LTS for the development tools. GitHub Actions uses the latest Node.js 22.
 
 ```sh
-npm ci
-npm ci --prefix instagram-feed
+npm run setup
 npm run dev
 ```
 
@@ -267,7 +266,7 @@ GitHub Pages publishing does not update an installed iOS binary. Native changes 
 ### Checks
 
 ```sh
-npm ci --prefix instagram-feed
+npm run setup
 npm test
 npx playwright install chromium webkit
 npm run test:ui
@@ -329,4 +328,4 @@ These commands affect the configured Cloudflare resources. Keep `PUSH_ENABLED=fa
 
 For operational detail, use [FIRESTORE.md](FIRESTORE.md), [IOS.md](IOS.md), and [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
-`npm ci && npm test` automatically installs Instagram test dependencies through the root `pretest` hook (network access required).
+`npm run setup` installs the locked root and Instagram test dependencies (network access required). Run it after cloning or changing lockfiles. Once dependencies are installed, `npm test` does not install packages and can run offline. CI and Pages install these dependencies explicitly before testing.
