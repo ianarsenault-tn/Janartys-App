@@ -546,7 +546,7 @@ export async function addFlavor({ name, note, dairyFree, color, allowDuplicate =
   let added;
   await changeLive(current => {
     if (current.catalog.length >= 500) throw new Error("The catalog is full (500 flavors). Ask the app administrator for help before adding another.");
-    checkDuplicate(current.catalog.map(hydrateFlavor), trimmed, null, allowDuplicate);
+    checkDuplicate(current.catalog.map(hydrateFlavor), trimmed, null, allowDuplicate, flavor.dairyFree);
     added = { ...flavor, id: slugify(trimmed, current.catalog) };
     // Append to the transaction's remote catalog, preserving other staff edits
     // and recalculating the ID if Firestore retries after a concurrent addition.

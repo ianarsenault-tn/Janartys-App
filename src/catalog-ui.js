@@ -2,7 +2,7 @@ import { duplicateFlavors } from "./catalog-actions.js";
 import { esc } from "./customer-ui.js";
 
 export function duplicateWarning(catalog, draft, id, prefix) {
-  const duplicates = duplicateFlavors(catalog, draft.name, id);
+  const duplicates = duplicateFlavors(catalog, draft.name, id, draft.dairyFree);
   if (!duplicates.length) return "";
   return `<p class="staff-message" role="status">This name already exists: ${duplicates.map(f => `${esc(f.name)}${f.archived ? " (archived)" : ""}`).join(", ")}. Review the existing flavor before adding another.</p><label class="check-row"><input type="checkbox" data-act="${prefix}-duplicate" ${draft.allowDuplicate ? "checked" : ""}/>This is a different flavor with the same name</label>`;
 }
@@ -27,7 +27,7 @@ export function editSheet(state, ui, controls) {
       <div class="sheet-kicker">Catalog${current?.archived ? " · Archived" : ""}</div><div class="sheet-title">Edit flavor</div>
       <div class="form">
         <label class="field-label">Name<input class="field" data-act="edit-name" maxlength="40" value="${esc(draft.name)}"/></label>
-        ${draft.name !== original.name ? duplicateWarning(state.catalog, draft, id, "edit") : ""}
+        ${(draft.name !== original.name || draft.dairyFree !== original.dairyFree) ? duplicateWarning(state.catalog, draft, id, "edit") : ""}
         <label class="field-label">Short note<textarea class="field" data-act="edit-note" maxlength="80">${esc(draft.note)}</textarea></label>
         <label class="field-label">Flavor story<textarea class="field" data-act="edit-story" maxlength="2000">${esc(draft.story)}</textarea></label>
         <label class="field-label">Tags (separate with commas)<input class="field" data-act="edit-tags" maxlength="300" value="${esc(draft.tagsText)}"/></label>
