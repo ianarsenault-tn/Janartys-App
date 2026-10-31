@@ -1,12 +1,12 @@
 const nameKey = value => String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("en");
 
-export function duplicateFlavors(catalog, name, exceptId) {
+export function duplicateFlavors(catalog, name, exceptId, dairyFree = false) {
   const key = nameKey(name);
-  return key ? catalog.filter(f => f.id !== exceptId && nameKey(f.name) === key) : [];
+  return key ? catalog.filter(f => f.id !== exceptId && nameKey(f.name) === key && (f.dairyFree === true) === (dairyFree === true)) : [];
 }
 
-export function checkDuplicate(catalog, name, exceptId, allowed) {
-  if (!allowed && duplicateFlavors(catalog, name, exceptId).length) {
+export function checkDuplicate(catalog, name, exceptId, allowed, dairyFree = false) {
+  if (!allowed && duplicateFlavors(catalog, name, exceptId, dairyFree).length) {
     throw new Error("A flavor with this name already exists. Review it or confirm this is a different flavor before saving.");
   }
 }
@@ -24,7 +24,10 @@ export function catalogEditPatch(current, id, original, changes, allowDuplicate 
   if ("name" in patch) {
     patch.name = String(patch.name).trim();
     if (!patch.name) throw new Error("Enter a flavor name.");
-    checkDuplicate(current.catalog.map(hydrate), patch.name, id, allowDuplicate);
+  }
+  if ("name" in patch || "dairyFree" in patch) {
+    const next = { ...hydrate(flavor), ...patch };
+    checkDuplicate(current.catalog.map(hydrate), next.name, id, allowDuplicate, next.dairyFree);
   }
   return { catalog: current.catalog.map(f => f.id === id ? { ...f, ...patch } : f), updatedAt: now,
     ...(current.caseIds.includes(id) && Object.keys(patch).length ? { caseUpdatedAt: now } : {}) };

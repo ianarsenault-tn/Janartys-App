@@ -776,7 +776,7 @@ function renderSwapSheet() {
       return `<button class="row ${chosen ? "chosen" : ""}" type="button" data-act="pick" data-id="${esc(f.id)}">
         <span class="radio"></span>
         <div>
-          <div class="row-name">${esc(f.name)}</div>
+          <div class="row-name">${esc(f.name)}${f.dairyFree ? " · Dairy-free" : ""}</div>
           <div class="row-note">${esc(f.note)}</div>
         </div>
         ${chosen ? `<span class="row-check">In</span>` : ""}
@@ -1468,7 +1468,7 @@ root.addEventListener("input", (e) => {
     if (key === "tags") ui.edit.draft.tagsText = t.value;
     if (key === "df") ui.edit.draft.dairyFree = t.checked;
     if (key === "duplicate") ui.edit.draft.allowDuplicate = t.checked;
-    if (key === "name") { ui.edit.draft.allowDuplicate = false; render(); }
+    if (key === "name" || key === "df") { ui.edit.draft.allowDuplicate = false; render(); }
   }
   if (act === "add-duplicate") ui.add.allowDuplicate = t.checked;
   if (act === "add-name") { ui.add.name = t.value; ui.add.allowDuplicate = false; render(); }
@@ -1479,6 +1479,8 @@ root.addEventListener("input", (e) => {
   }
   if (act === "add-df") {
     ui.add.dairyFree = t.checked;
+    ui.add.allowDuplicate = false;
+    render();
   }
   if (act === "add-name") {
     const btn = root.querySelector("[data-act=do-add]");

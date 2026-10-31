@@ -299,3 +299,51 @@ test("undo snapshots reject class instances and retain null-prototype plain stoc
     assert.deepEqual(snapshot, Object.getPrototypeOf(value) === null ? { soldOut: false } : null);
   }
 });
+
+test("same-name dairy variants are separate and same-type duplicates still require confirmation", async () => {
+  const h = await managerHarness({ app: false });
+  const regular = await h.store.addFlavor({ name: "Birthday Cake", dairyFree: false });
+  const df = await h.store.addFlavor({ name: "Birthday Cake", dairyFree: true });
+  assert.notEqual(regular.id, df.id);
+  for (const dairyFree of [true, false]) await assert.rejects(h.store.addFlavor({ name: " birthday   cake ", dairyFree }), /already exists/);
+  await assert.rejects(h.store.editFlavor(df.id, copy(h.store.flavorById(df.id)), { dairyFree: false }), /already exists/);
+  await h.store.editFlavor(df.id, copy(h.store.flavorById(df.id)), { note: "Separate dairy-free recipe" });
+  await h.store.setFlavorArchived(regular.id, true);
+  await assert.rejects(h.store.addFlavor({ name: "Birthday Cake", dairyFree: false }), /already exists/);
+  const retry = copy(h.backend.remote);
+  retry.catalog.push({ ...df, id: "concurrent-df", name: "Retry cake" });
+  h.backend.retryWith = retry;
+  await assert.rejects(h.store.addFlavor({ name: "Retry cake", dairyFree: true }), /already exists/);
+});
+
+test("Manager dairy-free toggle updates duplicate warnings and swap rows distinguish recipes", async () => {
+  const remote = fixture();
+  remote.catalog.push({ id: "birthday-regular", name: "Birthday Cake", dairyFree: false, note: "Cake" });
+  const h = await managerHarness({ remote });
+  await h.click("open-add"); await h.input("add-name", "Birthday Cake");
+  assert.match(h.root.innerHTML, /This name already exists/);
+  await h.input("add-df", true);
+  assert.doesNotMatch(h.root.innerHTML, /This name already exists/);
+  await h.input("add-df", false);
+  assert.match(h.root.innerHTML, /This name already exists/);
+  await h.input("add-df", true); await h.click("do-add");
+  const df = h.backend.remote.catalog.find(f => f.name === "Birthday Cake" && f.dairyFree);
+  assert.ok(df);
+  await h.click("tap-pan", { slot: "0" });
+  assert.match(h.root.innerHTML, /Birthday Cake · Dairy-free/);
+  await h.click("close-sheet"); await h.click("manage-flavors"); await h.click("edit-flavor", { id: df.id });
+  await h.input("edit-df", false);
+  assert.match(h.root.innerHTML, /This name already exists/);
+  await h.input("edit-df", true);
+  assert.doesNotMatch(h.root.innerHTML, /This name already exists/);
+});
+
+test("adding a regular version after dairy-free and renaming across variants works", async () => {
+  const h = await managerHarness({ app: false });
+  await h.store.addFlavor({ name: "Variant test cake", dairyFree: true });
+  const regular = await h.store.addFlavor({ name: "Variant test cake", dairyFree: false });
+  const other = await h.store.addFlavor({ name: "Another test cake", dairyFree: true });
+  await h.store.editFlavor(other.id, copy(h.store.flavorById(other.id)), { name: "Only regular cake" });
+  await h.store.editFlavor(regular.id, copy(h.store.flavorById(regular.id)), { name: "Only regular cake" });
+  assert.equal(h.store.flavorById(regular.id).dairyFree, false);
+});
